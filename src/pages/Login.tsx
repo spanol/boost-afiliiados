@@ -34,7 +34,7 @@ export default function Login() {
         className="bg-white p-8 rounded-xl shadow-sm border border-slate-200 w-full max-w-md"
       >
         <div className="text-center mb-8">
-          <div className="mx-auto w-12 h-12 bg-brand rounded-xl flex items-center justify-center text-white text-xl font-bold mb-4">CS</div>
+          <div className="mx-auto w-12 h-12 bg-brand rounded-xl flex items-center justify-center text-white text-xl font-bold mb-4">AB</div>
           <h2 className="text-xl font-bold text-slate-800">Autenticação</h2>
           <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mt-1">Acesse sua área restrita</p>
         </div>

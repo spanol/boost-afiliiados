@@ -14,9 +14,9 @@ export default function Home() {
         className="text-center space-y-12 max-w-2xl px-6"
       >
         <div className="space-y-4">
-          <div className="mx-auto w-16 h-16 bg-brand rounded-2xl flex items-center justify-center text-white text-2xl font-bold shadow-xl shadow-brand/20">CS</div>
+          <div className="mx-auto w-16 h-16 bg-brand rounded-2xl flex items-center justify-center text-white text-2xl font-bold shadow-xl shadow-brand/20">AB</div>
           <h1 className="text-4xl font-extrabold tracking-tight text-slate-900 sm:text-5xl">
-            Afiliados <span className="text-brand">Carlos Santos</span>
+            Agência <span className="text-brand">Boost</span>
           </h1>
           <p className="text-slate-500 text-lg font-medium leading-relaxed">
             Plataforma profissional de gestão de afiliados. Alta densidade de dados, performance e resultados.

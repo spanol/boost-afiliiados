@@ -54,9 +54,9 @@ export default function DashboardLayout() {
     <div className="flex flex-col h-full bg-white border-r border-slate-200">
       <div className="p-6">
         <Link to="/" className="flex items-center gap-3 group">
-          <div className="w-8 h-8 bg-brand rounded-lg flex items-center justify-center text-white font-bold transition-transform group-hover:scale-105">CS</div>
+          <div className="w-8 h-8 bg-brand rounded-lg flex items-center justify-center text-white font-bold transition-transform group-hover:scale-105">AB</div>
           <h1 className="text-sm font-bold leading-tight text-slate-900">
-            Afiliados<br/><span className="text-brand">Carlos Santos</span>
+            Agência<br/><span className="text-brand">Boost</span>
           </h1>
         </Link>
       </div>

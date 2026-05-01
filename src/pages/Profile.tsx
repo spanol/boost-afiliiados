@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { useAuth } from '../contexts/AuthContext';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { updatePassword, updateEmail } from 'firebase/auth';
-import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase';
+import { updatePassword } from 'firebase/auth';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { auth, db, storage, handleFirestoreError, OperationType } from '../lib/firebase';
 import { 
   User, 
   Mail, 
@@ -11,7 +12,9 @@ import {
   Image as ImageIcon,
   Save,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Upload,
+  Loader2
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -21,7 +24,37 @@ export default function Profile() {
   const [avatarUrl, setAvatarUrl] = useState(profile?.avatarUrl || '');
   const [newPassword, setNewPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+
+    setUploading(true);
+    setMessage(null);
+
+    try {
+      const storageRef = ref(storage, `avatars/${user.uid}/${Date.now()}_${file.name}`);
+      const snapshot = await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      
+      setAvatarUrl(downloadURL);
+      
+      // Update immediately in Firestore as well for better UX
+      await updateDoc(doc(db, 'users', user.uid), {
+        avatarUrl: downloadURL,
+        updatedAt: serverTimestamp()
+      });
+      
+      setMessage({ type: 'success', text: 'Foto de perfil enviada com sucesso!' });
+    } catch (err: any) {
+      console.error('Error uploading file:', err);
+      setMessage({ type: 'error', text: 'Erro ao enviar imagem. Verifique as dimensões ou permissões.' });
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,13 +90,6 @@ export default function Profile() {
     }
   };
 
-  const avatars = [
-    `https://api.dicebear.com/7.x/avataaars/svg?seed=${name}`,
-    `https://api.dicebear.com/7.x/bottts/svg?seed=${name}`,
-    `https://api.dicebear.com/7.x/pixel-art/svg?seed=${name}`,
-    `https://api.dicebear.com/7.x/miniavs/svg?seed=${name}`,
-  ];
-
   return (
     <div className="max-w-4xl mx-auto space-y-8 pb-12">
       <header>
@@ -89,32 +115,33 @@ export default function Profile() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Avatar Section */}
           <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col items-center h-fit">
-            <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-6 w-full text-center">Avatar</h3>
-            <div className="relative group cursor-pointer mb-6">
+            <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-6 w-full text-center">Foto de Perfil</h3>
+            <div className="relative group mb-6">
               <img 
                 src={avatarUrl} 
                 alt="Avatar" 
-                className="w-24 h-24 rounded-xl object-cover bg-slate-50 border border-slate-100 shadow-inner"
+                className="w-28 h-28 rounded-full object-cover bg-slate-50 border-4 border-white shadow-lg"
               />
-              <div className="absolute inset-0 bg-slate-900/40 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                <ImageIcon className="text-white" size={20} />
-              </div>
+              {uploading && (
+                <div className="absolute inset-0 bg-white/60 rounded-full flex items-center justify-center backdrop-blur-[1px]">
+                  <Loader2 className="text-brand animate-spin" size={24} />
+                </div>
+              )}
             </div>
             
-            <div className="grid grid-cols-2 gap-2 w-full">
-              {avatars.map((url, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => setAvatarUrl(url)}
-                  className={cn(
-                    "p-0.5 rounded-lg border-2 transition-all overflow-hidden bg-slate-50",
-                    avatarUrl === url ? "border-brand" : "border-transparent opacity-60 hover:opacity-100"
-                  )}
-                >
-                  <img src={url} alt={`Avatar option ${idx}`} className="w-full h-auto rounded-md" />
-                </button>
-              ))}
+            <div className="w-full">
+              <label className="w-full flex flex-col items-center justify-center gap-2 px-4 py-3 bg-slate-50 border border-slate-200 border-dashed rounded-xl cursor-pointer hover:bg-slate-100 hover:border-brand/30 transition-all text-slate-500 hover:text-brand bg-image-upload">
+                <Upload size={18} />
+                <span className="text-[10px] font-bold uppercase tracking-tight">Alterar Foto</span>
+                <input 
+                  type="file" 
+                  className="hidden" 
+                  accept="image/*"
+                  onChange={handleFileUpload}
+                  disabled={uploading}
+                />
+              </label>
+              <p className="text-[9px] text-center text-slate-400 mt-3 font-medium px-2">Suporte para JPG, PNG ou SVG. Recomendado 400x400px.</p>
             </div>
           </div>
 

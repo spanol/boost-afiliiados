@@ -54,7 +54,7 @@ export default function Register() {
           name: name.trim(),
           email: email.trim().toLowerCase(),
           role,
-          avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(name)}`,
+          avatarUrl: `https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(name)}`,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
         }, { merge: true });
@@ -110,7 +110,7 @@ export default function Register() {
         className="bg-white p-8 rounded-xl shadow-sm border border-slate-200 w-full max-w-md"
       >
         <div className="text-center mb-8">
-          <div className="mx-auto w-12 h-12 bg-brand rounded-xl flex items-center justify-center text-white text-xl font-bold mb-4">CS</div>
+          <div className="mx-auto w-12 h-12 bg-brand rounded-xl flex items-center justify-center text-white text-xl font-bold mb-4">AB</div>
           <h2 className="text-xl font-bold text-slate-800">Novo Afiliado</h2>
           <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mt-1">Crie sua conta profissional</p>
         </div>
