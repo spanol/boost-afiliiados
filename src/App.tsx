@@ -10,6 +10,7 @@ import ClientDashboard from './pages/ClientDashboard';
 import Profile from './pages/Profile';
 import Settings from './pages/Settings';
 import AffiliatesList from './pages/AffiliatesList';
+import AffiliateDetails from './pages/AffiliateDetails';
 import DashboardLayout from './components/DashboardLayout';
 
 const ProtectedRoute = ({ children, role }: { children: React.ReactNode, role?: 'admin' | 'client' }) => {
@@ -67,6 +68,7 @@ export default function App() {
             <Route path="/profile" element={<Profile />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/affiliates" element={<AffiliatesList />} />
+            <Route path="/affiliates/:id" element={<AffiliateDetails />} />
           </Route>
         </Routes>
       </AuthProvider>

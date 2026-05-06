@@ -98,12 +98,12 @@ export default function Settings() {
         <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mt-1">Gerencie chaves de API e integração Firebase</p>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 gap-8">
         {/* API Settings */}
         <motion.div 
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden"
+          className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden"
         >
           <div className="p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50 flex items-center gap-2">
             <Key size={16} className="text-brand" />
@@ -147,40 +147,6 @@ export default function Settings() {
                 {saveSuccess ? 'Chave Salva!' : 'Salvar Configuração'}
               </button>
             </form>
-          </div>
-        </motion.div>
-
-        {/* Firebase Config View */}
-        <motion.div 
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden"
-        >
-          <div className="p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50 flex items-center gap-2">
-            <Database size={16} className="text-brand" />
-            <h3 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-tight">Infraestrutura Firebase</h3>
-          </div>
-          <div className="p-6 h-full">
-            <div className="flex justify-between items-center mb-3">
-              <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Configuração Atual</span>
-              <button 
-                onClick={() => copyToClipboard(fbConfig)}
-                className="text-[10px] font-bold text-brand uppercase flex items-center gap-1 hover:underline"
-              >
-                {copied ? <Check size={12} /> : <Copy size={12} />}
-                {copied ? 'Copiado' : 'Copiar JSON'}
-              </button>
-            </div>
-            <div className="relative group">
-              <pre className="bg-slate-900 dark:bg-black text-slate-300 dark:text-slate-400 p-4 rounded-lg text-[10px] font-mono overflow-x-auto max-h-[180px] border border-slate-800 dark:border-slate-800 scrollbar-hide">
-                {fbConfig}
-              </pre>
-              <div className="absolute inset-0 bg-brand/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none rounded-lg" />
-            </div>
-            <p className="mt-4 text-[10px] text-slate-400 dark:text-slate-500 italic">
-              * Para alterar o projeto do Firebase, edite o arquivo <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">firebase-applet-config.json</code> no ambiente de desenvolvimento.
-            </p>
           </div>
         </motion.div>
       </div>

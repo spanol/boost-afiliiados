@@ -12,18 +12,21 @@ async function startServer() {
 
   app.use(express.json());
 
-  // Proxy route for Affiliate API to avoid CORS issues
-  app.get('/api/affiliates', async (req, res) => {
+  // Proxy route for Affiliate API to handle multiple endpoints dynamically
+  app.get('/api/external/:endpoint/:id?', async (req, res) => {
     try {
+      const { endpoint, id } = req.params;
       const BASE_URL = process.env.VITE_AFFILIATE_API_BASE_URL || 'https://affiliate-api-prd.partnersotg.com';
       const apiKey = process.env.VITE_AFFILIATE_API_KEY || process.env.AFFILIATE_API_KEY;
 
       if (!apiKey) {
-        console.error('Affiliate API Error: API Key is missing in environment');
-        return res.status(500).json({ error: 'Chave de API não configurada no ambiente' });
+        return res.status(500).json({ error: 'Chave de API não configurada' });
       }
 
-      const targetUrl = `${BASE_URL}/api/v2/external/affiliates`;
+      const targetUrl = id 
+        ? `${BASE_URL}/api/v2/external/${endpoint}/${id}`
+        : `${BASE_URL}/api/v2/external/${endpoint}`;
+        
       console.log(`Proxying request to: ${targetUrl}`);
       
       const response = await fetch(targetUrl, {
@@ -37,9 +40,8 @@ async function startServer() {
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error(`External API Error (${response.status}):`, errorText);
         return res.status(response.status).json({ 
-          error: `Erro na API Externa: ${response.status}`, 
+          error: `Erro na API Externa (${endpoint}): ${response.status}`, 
           details: errorText 
         });
       }
@@ -53,6 +55,11 @@ async function startServer() {
         message: error instanceof Error ? error.message : String(error) 
       });
     }
+  });
+
+  // Keep the old /api/affiliates for backward compatibility or just redirect it
+  app.get('/api/affiliates', (req, res) => {
+    res.redirect('/api/external/affiliates');
   });
 
   // Vite middleware for development

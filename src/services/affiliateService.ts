@@ -34,6 +34,42 @@ export async function fetchAffiliates(): Promise<Affiliate[]> {
   }
 }
 
+export async function fetchAffiliateById(id: string): Promise<any> {
+  try {
+    const response = await fetch(`/api/external/affiliates/${id}`, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        console.warn(`Affiliate ${id} not found via direct endpoint, falling back to list lookup...`);
+        const allAffiliates = await fetchAffiliates();
+        const found = allAffiliates.find((a: any) => (a.id || a._id) === id);
+        if (found) return found;
+      }
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || errorData.message || `Erro na API: ${response.status}`);
+    }
+
+    const data = await response.json();
+    return data.data || data;
+  } catch (error) {
+    console.error(`Error fetching affiliate ${id}:`, error);
+    // Even if it's another error, try fallback one last time
+    try {
+      const allAffiliates = await fetchAffiliates();
+      const found = allAffiliates.find((a: any) => (a.id || a._id) === id);
+      if (found) return found;
+    } catch (fallbackError) {
+      console.error('Fallback lookup failed too:', fallbackError);
+    }
+    throw error;
+  }
+}
+
 function extractArray(data: any): Affiliate[] {
   if (!data) return [];
   

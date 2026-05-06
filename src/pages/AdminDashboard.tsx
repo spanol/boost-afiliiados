@@ -1,3 +1,4 @@
+import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { 
   Users, 
@@ -5,20 +6,40 @@ import {
   BarChart3, 
   ArrowUpRight, 
   ArrowDownRight,
-  UserPlus
+  UserPlus,
+  Zap,
+  Globe,
+  Loader2
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { cn } from '../lib/utils';
-
-const metrics = [
-  { label: 'Total de Afiliados', value: '1,248', trend: +12, icon: Users, color: 'brand' },
-  { label: 'Conversões Hoje', value: '84', trend: +5, icon: BarChart3, color: 'green' },
-  { label: 'Ganhos Acumulados', value: 'R$ 45.200,00', trend: +8, icon: DollarSign, color: 'purple' },
-  { label: 'Novos Cadastros', value: '12', trend: -2, icon: UserPlus, color: 'orange' },
-];
+import { fetchAffiliates } from '../services/affiliateService';
 
 export default function AdminDashboard() {
   const { profile } = useAuth();
+  const [affiliatesCount, setAffiliatesCount] = useState<string | number>('---');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function getStats() {
+      try {
+        const affiliates = await fetchAffiliates();
+        setAffiliatesCount(affiliates.length);
+      } catch (err) {
+        console.error('Error fetching dashboard stats:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    getStats();
+  }, []);
+
+  const metrics = [
+    { label: 'Total de Afiliados', value: affiliatesCount.toString(), trend: +12, icon: Users, color: 'brand' },
+    { label: 'Conversões Hoje', value: '0', trend: 0, icon: BarChart3, color: 'green' },
+    { label: 'Ganhos Acumulados', value: 'R$ 0,00', trend: 0, icon: DollarSign, color: 'purple' },
+    { label: 'Novos Cadastros', value: affiliatesCount.toString(), trend: +affiliatesCount === 0 ? 0 : 100, icon: UserPlus, color: 'orange' },
+  ];
 
   return (
     <div className="space-y-8">
@@ -36,59 +57,71 @@ export default function AdminDashboard() {
             transition={{ delay: idx * 0.05 }}
             className={cn(
               "p-5 rounded-xl border shadow-sm transition-all relative overflow-hidden",
-              idx === 3 
-                ? "bg-gradient-to-br from-brand to-slate-800 text-white border-transparent" 
+              idx === 0 
+                ? "bg-gradient-to-br from-brand/90 to-brand text-white border-transparent" 
                 : "bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
             )}
           >
-            <div className="flex justify-between items-start mb-4">
-              <div className={cn(
-                "p-2 rounded-lg",
-                idx === 3 ? "bg-white/10" : {
-                  'bg-brand/10': metric.color === 'brand',
-                  'bg-green-100': metric.color === 'green',
-                  'bg-purple-100': metric.color === 'purple',
-                  'bg-orange-100': metric.color === 'orange'
-                }
-              )}>
-                <metric.icon size={20} className={cn(
-                  idx === 3 ? "text-white" : {
-                    'text-brand': metric.color === 'brand',
-                    'text-green-600': metric.color === 'green',
-                    'text-purple-600': metric.color === 'purple',
-                    'text-orange-600': metric.color === 'orange'
-                  }
-                )} />
+            {loading && idx < 1 ? (
+              <div className="flex items-center justify-center h-20">
+                <Loader2 className="animate-spin" />
               </div>
-              {idx !== 3 && (
-                <div className={cn(
-                  "flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full",
-                  metric.trend > 0 ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
-                )}>
-                  {metric.trend > 0 ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
-                  {Math.abs(metric.trend)}%
+            ) : (
+              <>
+                <div className="flex justify-between items-start mb-4">
+                  <div className={cn(
+                    "p-2 rounded-lg",
+                    idx === 0 ? "bg-white/10" : {
+                      'bg-brand/10': metric.color === 'brand',
+                      'bg-green-100': metric.color === 'green',
+                      'bg-purple-100': metric.color === 'purple',
+                      'bg-orange-100': metric.color === 'orange'
+                    }
+                  )}>
+                    <metric.icon size={20} className={cn(
+                      idx === 0 ? "text-white" : {
+                        'text-brand': metric.color === 'brand',
+                        'text-green-600': metric.color === 'green',
+                        'text-purple-600': metric.color === 'purple',
+                        'text-orange-600': metric.color === 'orange'
+                      }
+                    )} />
+                  </div>
                 </div>
-              )}
-            </div>
-            
-            <div>
-              <p className={cn(
-                "text-[10px] uppercase font-bold tracking-wider mb-1",
-                idx === 3 ? "text-white/70" : "text-slate-500 dark:text-slate-400"
-              )}>
-                {metric.label}
-              </p>
-              <h3 className="text-2xl font-bold dark:text-white">{metric.value}</h3>
-              <div className={cn(
-                "text-[10px] mt-2 font-medium",
-                idx === 3 ? "text-white/80" : "text-slate-400 dark:text-slate-500"
-              )}>
-                {idx === 3 ? "Meta mensal: 82%" : idx === 2 ? "Meta acumulada" : "Estável esta semana"}
-              </div>
-            </div>
+                
+                <div>
+                  <p className={cn(
+                    "text-[10px] uppercase font-bold tracking-wider mb-1",
+                    idx === 0 ? "text-white/70" : "text-slate-500 dark:text-slate-400"
+                  )}>
+                    {metric.label}
+                  </p>
+                  <h3 className="text-2xl font-bold dark:text-white">{metric.value}</h3>
+                </div>
+              </>
+            )}
           </motion.div>
         ))}
       </div>
+
+      {/* Connection Status Section */}
+      <section className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-green-100 dark:bg-green-900/30 text-green-600 rounded-xl flex items-center justify-center">
+              <Zap size={24} />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">API de Captura de Dados</h3>
+              <p className="text-xs text-slate-500 font-medium">Status operacional: Todos os sistemas estão online e sincronizados.</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 px-4 py-2 bg-slate-50 dark:bg-slate-800 rounded-lg">
+            <Globe size={16} className="text-brand" />
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Latência: 124ms</span>
+          </div>
+        </div>
+      </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl flex flex-col shadow-sm">

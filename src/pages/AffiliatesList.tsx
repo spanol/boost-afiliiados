@@ -5,7 +5,6 @@ import {
   Search, 
   Filter, 
   RefreshCw, 
-  ExternalLink,
   ChevronRight,
   AlertCircle,
   Loader2
@@ -13,6 +12,7 @@ import {
 import { fetchAffiliates } from '../services/affiliateService';
 import { cn } from '../lib/utils';
 import { useAuth } from '../contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 interface Affiliate {
   id: string;
@@ -28,6 +28,7 @@ interface Affiliate {
 
 export default function AffiliatesList() {
   const { profile } = useAuth();
+  const navigate = useNavigate();
   const [affiliates, setAffiliates] = useState<Affiliate[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -63,6 +64,10 @@ export default function AffiliatesList() {
         item.id?.toString().includes(searchTerm)
       )
     : [];
+
+  const handleOpenDetails = (affiliate: any) => {
+    navigate(`/affiliates/${affiliate.id}`);
+  };
 
   return (
     <div className="space-y-8 pb-12">
@@ -147,7 +152,11 @@ export default function AffiliatesList() {
               </thead>
               <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
                 {filteredAffiliates.map((item: any) => (
-                  <tr key={item.id || item._id || Math.random()} className="hover:bg-brand/[0.02] dark:hover:bg-white/[0.02] transition-colors group">
+                  <tr 
+                    key={item.id || item._id || Math.random()} 
+                    className="hover:bg-brand/[0.02] dark:hover:bg-white/[0.02] transition-colors group cursor-pointer"
+                    onClick={() => handleOpenDetails(item)}
+                  >
                     <td className="px-6 py-4 font-mono text-[10px] text-slate-400 group-hover:text-brand transition-colors">
                       #{item.id || item._id || 'N/A'}
                     </td>
@@ -182,8 +191,14 @@ export default function AffiliatesList() {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <button className="p-2 text-slate-300 hover:text-brand dark:text-slate-600 dark:hover:text-brand transition-all hover:bg-brand/5 dark:hover:bg-brand/20 rounded-lg">
-                        <ExternalLink size={16} />
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenDetails(item);
+                        }}
+                        className="p-2 text-slate-300 hover:text-brand dark:text-slate-600 dark:hover:text-brand transition-all hover:bg-brand/5 dark:hover:bg-brand/20 rounded-lg"
+                      >
+                        <ChevronRight size={16} />
                       </button>
                     </td>
                   </tr>
