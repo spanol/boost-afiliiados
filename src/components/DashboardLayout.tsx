@@ -63,9 +63,12 @@ export default function DashboardLayout() {
   const SidebarContent = () => (
     <div className="flex flex-col h-full bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800">
       <div className="p-6 pb-2">
-        <Link to="/" className="flex items-center group">
-          <h1 className="text-lg font-bold tracking-tight text-slate-900 dark:text-white group-hover:text-brand transition-colors">
-            Agência <span className="text-brand">Boost</span>
+        <Link to="/" className="flex items-center gap-2 group">
+          <div className="w-6 h-6 bg-brand rounded flex items-center justify-center">
+            <TrendingUp className="text-white" size={14} />
+          </div>
+          <h1 className="text-sm font-black tracking-tighter text-slate-900 dark:text-white uppercase">
+            PREVIMARKET
           </h1>
         </Link>
       </div>
