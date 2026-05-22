@@ -664,11 +664,11 @@ export default function Home() {
         <section id="contato" className="px-6 pt-[50px] xl:px-0">
           <div className="mx-auto max-w-[1140px]">
             <div className="flex justify-center">
-              <div className="relative h-[110px] w-[110px] overflow-hidden rounded-full">
+              <div className="relative h-[120px] w-[120px] overflow-hidden">
                 <img src={asset('/boost-home/boost-icon.webp')} alt="" className="absolute inset-0 h-full w-full" />
                 <div className="absolute inset-[10.52%_10.24%_9.48%_11.57%] bg-gradient-to-b from-[#19202e] to-[#101724]" />
                 <img
-                  src={asset('/boost-home/boost-icon-vector.svg')}
+                  src={asset('/boost-home/favicon.png')}
                   alt=""
                   className="absolute inset-[19.61%_22.59%_20.04%_16.12%] h-auto w-auto"
                 />
@@ -870,7 +870,7 @@ export default function Home() {
 
             <div className="overflow-hidden pb-[6px]">
               <img
-                src={asset('/boost-home/footer-wordmark.svg')}
+                src={asset('/boost-home/logo.svg')}
                 alt=""
                 className="mx-auto w-full max-w-[1276.14px] opacity-100"
               />
