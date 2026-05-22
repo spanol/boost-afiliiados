@@ -7,6 +7,8 @@ import { LogIn, Mail, Lock, AlertCircle } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { cn } from '../lib/utils';
 
+const boostLogo = `${import.meta.env.BASE_URL}boost-home/logo.svg`;
+
 export default function Login() {
   const { theme } = useTheme();
   const [email, setEmail] = useState('');
@@ -37,9 +39,11 @@ export default function Login() {
         className="bg-white dark:bg-slate-900 p-8 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 w-full max-w-md"
       >
         <div className="text-center mb-8">
-          <h2 className="text-2xl font-bold text-slate-800 dark:text-white">
-            Agência <span className="text-brand">Boost</span>
-          </h2>
+          <img
+            src={boostLogo}
+            alt="Boost"
+            className="mx-auto h-[28px] w-auto"
+          />
           <p className="text-slate-400 dark:text-slate-500 text-[10px] font-bold uppercase tracking-wider mt-1">Acesse sua área restrita</p>
         </div>
 

@@ -1,26 +1,29 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
+
+const asset = (path: string) => `${import.meta.env.BASE_URL}${path.replace(/^\/+/, '')}`;
+type DashboardTab = 'desktop' | 'mobile';
 
 const stats = [
   {
-    icon: '/boost-home/stat-icon-1-fill.png',
+    icon: asset('/boost-home/stat-icon-1-fill.svg'),
     mask: true,
     value: '+12.000',
     label: 'Afiliados',
   },
   {
-    icon: '/boost-home/stat-icon-2-fill.png',
+    icon: asset('/boost-home/stat-icon-2-fill.svg'),
     mask: true,
     value: '+200.000 / Mês',
     label: 'Usuários cadastrados',
   },
   {
-    icon: '/boost-home/stat-icon-3.png',
+    icon: asset('/boost-home/stat-icon-3.svg'),
     value: '+120.000 / Mês',
     label: 'FTDs',
   },
   {
-    icon: '/boost-home/stat-icon-4.png',
+    icon: asset('/boost-home/stat-icon-4.svg'),
     value: '+100.000 / Mês',
     label: 'CPAs qualificados',
   },
@@ -64,7 +67,7 @@ const featureCards = [
   {
     title: ['Autenticação e', 'Controle de Acesso'],
     description: ['Segurança com', 'acessos personalizados.'],
-    image: '/boost-home/feature-1.webp',
+    image: asset('/boost-home/feature-1.webp'),
     imageClassName: 'w-[366px]',
     containerClassName:
       'justify-between bg-[radial-gradient(circle_at_top_left,_#cfddf6_0%,_#98aed4_50%,_#607eb2_100%)] pb-[71px]',
@@ -72,7 +75,7 @@ const featureCards = [
   {
     title: ['Gestão de', 'Usuários'],
     description: ['Controle total de', 'parceiros e equipes.'],
-    image: '/boost-home/feature-2.webp',
+    image: asset('/boost-home/feature-2.webp'),
     imageClassName: 'absolute bottom-[-2px] right-0 w-[409px]',
     containerClassName:
       'overflow-hidden bg-[radial-gradient(circle_at_top_left,_#cfddf6_0%,_#98aed4_50%,_#607eb2_100%)]',
@@ -80,7 +83,7 @@ const featureCards = [
   {
     title: ['Tenha Dashboards', 'Otimizados'],
     description: ['Dados na palma da sua', 'mão para decisões rápidas.'],
-    image: '/boost-home/feature-3.webp',
+    image: asset('/boost-home/feature-3.webp'),
     imageClassName: 'absolute bottom-[-2px] right-0 w-[500px]',
     containerClassName:
       'overflow-hidden bg-[radial-gradient(circle_at_top_left,_#cfddf6_0%,_#98aed4_50%,_#607eb2_100%)]',
@@ -88,7 +91,7 @@ const featureCards = [
   {
     title: ['Modo Administrativo', 'Contextual'],
     description: ['Gestão estratégica', 'da operação.'],
-    image: '/boost-home/feature-4.webp',
+    image: asset('/boost-home/feature-4.webp'),
     imageClassName: 'absolute bottom-0 left-[77px] w-[375px]',
     containerClassName:
       'overflow-hidden bg-[radial-gradient(circle_at_top_left,_#cfddf6_0%,_#98aed4_50%,_#607eb2_100%)]',
@@ -156,12 +159,14 @@ function WhiteButton({
 }
 
 export default function Home() {
+  const [dashboardTab, setDashboardTab] = useState<DashboardTab>('desktop');
+
   return (
     <div id="top" className="min-h-screen bg-[#050c1a] text-white">
       <header className="sticky top-0 z-50 border-b border-white/8 bg-[#141c2a]">
         <div className="mx-auto flex h-[70px] w-full max-w-[1048px] items-center justify-between gap-8 px-6 xl:px-0">
           <img
-            src="/boost-home/logo.png"
+            src={asset('/boost-home/logo.svg')}
             alt="Boost"
             className="h-[24.67px] w-[99.73px] shrink-0"
           />
@@ -205,7 +210,7 @@ export default function Home() {
 
               <WhiteButton href="#contato" className="mt-10 gap-2">
                 <img
-                  src="/boost-home/hero-arrow.png"
+                  src={asset('/boost-home/hero-arrow.svg')}
                   alt=""
                   className="h-[14.02px] w-[14.24px]"
                 />
@@ -215,7 +220,7 @@ export default function Home() {
 
             <div id="plataforma" className="mt-[158px]">
               <img
-                src="/boost-home/hero-platform.webp"
+                src={asset('/boost-home/hero-platform.webp')}
                 alt="Plataforma Boost"
                 className="mx-auto w-full max-w-[1048px]"
               />
@@ -250,8 +255,8 @@ export default function Home() {
                       <span
                         className="block h-8 w-8 bg-cover bg-center"
                         style={{
-                          WebkitMaskImage: 'url(/boost-home/stat-mask.png)',
-                          maskImage: 'url(/boost-home/stat-mask.png)',
+                          WebkitMaskImage: `url(${asset('/boost-home/stat-mask.svg')})`,
+                          maskImage: `url(${asset('/boost-home/stat-mask.svg')})`,
                           WebkitMaskRepeat: 'no-repeat',
                           maskRepeat: 'no-repeat',
                           WebkitMaskSize: 'contain',
@@ -290,7 +295,7 @@ export default function Home() {
             <div className="mt-11 flex flex-wrap items-center justify-center gap-x-10 gap-y-4 text-center">
               {genericPainPoints.map((item) => (
                 <div key={item} className="flex items-center gap-2">
-                  <img src="/boost-home/cross-red.png" alt="" className="h-6 w-6" />
+                  <img src={asset('/boost-home/cross-red.svg')} alt="" className="h-6 w-6" />
                   <span className="text-[16px] leading-[24px] text-[#4a5565]">{item}</span>
                 </div>
               ))}
@@ -307,7 +312,7 @@ export default function Home() {
                 {boostAdvantages.map((item) => (
                   <div key={item.title} className="text-center">
                     <div className="flex justify-center">
-                      <img src="/boost-home/check-blue.png" alt="" className="h-6 w-6" />
+                      <img src={asset('/boost-home/check-blue.svg')} alt="" className="h-6 w-6" />
                     </div>
                     <h3 className="pt-[15.25px] text-[16px] font-bold leading-[19.2px]">
                       {item.title}
@@ -394,19 +399,62 @@ export default function Home() {
             <div className="mt-[70px]">
               <div className="flex justify-center">
                 <div className="flex rounded-full border border-white p-[3px]">
-                  <button className="flex items-center gap-[5px] rounded-full border border-white bg-gradient-to-b from-white to-[#cfddf6] px-[17px] py-[9px] text-[12px] font-bold leading-[18px] text-black">
-                    <img src="/boost-home/desktop-tab.png" alt="" className="h-3 w-3" />
+                  <button
+                    type="button"
+                    onClick={() => setDashboardTab('desktop')}
+                    aria-pressed={dashboardTab === 'desktop'}
+                    className={[
+                      'flex items-center gap-[5px] rounded-full px-[17px] py-[9px] text-[12px] font-bold leading-[18px] transition',
+                      dashboardTab === 'desktop'
+                        ? 'border border-white bg-gradient-to-b from-white to-[#cfddf6] text-black shadow-[0_6px_16px_rgba(207,221,246,0.35)]'
+                        : 'border border-transparent text-white/75 hover:text-white',
+                    ].join(' ')}
+                  >
+                    <img src={asset('/boost-home/desktop-tab.svg')} alt="" className="h-3 w-3" />
                     Desktop
                   </button>
-                  <button className="flex items-center gap-[5px] rounded-full border border-transparent px-[17px] py-[9px] text-[12px] font-bold leading-[18px] text-white">
-                    <img src="/boost-home/mobile-tab.png" alt="" className="h-3 w-3" />
+                  <button
+                    type="button"
+                    onClick={() => setDashboardTab('mobile')}
+                    aria-pressed={dashboardTab === 'mobile'}
+                    className={[
+                      'flex items-center gap-[5px] rounded-full px-[17px] py-[9px] text-[12px] font-bold leading-[18px] transition',
+                      dashboardTab === 'mobile'
+                        ? 'border border-white bg-gradient-to-b from-white to-[#cfddf6] text-black shadow-[0_6px_16px_rgba(207,221,246,0.35)]'
+                        : 'border border-transparent text-white/75 hover:text-white',
+                    ].join(' ')}
+                  >
+                    <img src={asset('/boost-home/mobile-tab.svg')} alt="" className="h-3 w-3" />
                     Mobile
                   </button>
                 </div>
               </div>
 
               <div className="mt-[70px]">
-                <img src="/boost-home/dashboard.webp" alt="Dashboard Boost" className="w-full" />
+                {dashboardTab === 'desktop' ? (
+                  <img
+                    src={asset('/boost-home/dashboard.webp')}
+                    alt="Dashboard Boost na versão desktop"
+                    className="w-full"
+                  />
+                ) : (
+                  <div className="flex justify-center">
+                    <div className="relative w-full max-w-[320px] rounded-[40px] border border-white/15 bg-[linear-gradient(180deg,#192334_0%,#0a1220_100%)] p-3 shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
+                      <div className="mb-3 flex justify-center">
+                        <div className="h-1.5 w-20 rounded-full bg-white/20" />
+                      </div>
+                      <div className="overflow-hidden rounded-[30px] border border-white/10 bg-[#0f1725]">
+                        <div className="h-[560px] overflow-hidden">
+                          <img
+                            src={asset('/boost-home/dashboard.webp')}
+                            alt="Dashboard Boost na versão mobile"
+                            className="h-full w-full origin-top scale-[1.92] object-cover object-top"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -428,7 +476,7 @@ export default function Home() {
               {qualificationItems.map((item) => (
                 <div key={item[0]} className="text-center">
                   <div className="flex justify-center">
-                    <img src="/boost-home/check-white.png" alt="" className="h-6 w-6" />
+                    <img src={asset('/boost-home/check-white.svg')} alt="" className="h-6 w-6" />
                   </div>
                   <h3 className="pt-[15.25px] text-[16px] font-bold leading-[19.2px] text-white">
                     {item[0]}
@@ -444,10 +492,10 @@ export default function Home() {
           <div className="mx-auto max-w-[1140px]">
             <div className="flex justify-center">
               <div className="relative h-[110px] w-[110px] overflow-hidden rounded-full">
-                <img src="/boost-home/boost-icon.webp" alt="" className="absolute inset-0 h-full w-full" />
+                <img src={asset('/boost-home/boost-icon.webp')} alt="" className="absolute inset-0 h-full w-full" />
                 <div className="absolute inset-[10.52%_10.24%_9.48%_11.57%] bg-gradient-to-b from-[#19202e] to-[#101724]" />
                 <img
-                  src="/boost-home/boost-icon-vector.png"
+                  src={asset('/boost-home/boost-icon-vector.svg')}
                   alt=""
                   className="absolute inset-[19.61%_22.59%_20.04%_16.12%] h-auto w-auto"
                 />
@@ -482,7 +530,7 @@ export default function Home() {
                       <div className="relative rounded-[10px] border border-[#232a38] bg-[#19202e] px-[15px] py-[14px] text-[16px] leading-[24px] text-white">
                         Sim
                         <img
-                          src="/boost-home/select-arrow.png"
+                          src={asset('/boost-home/select-arrow.svg')}
                           alt=""
                           className="absolute right-[10px] top-1/2 h-[11px] w-[11px] -translate-y-1/2"
                         />
@@ -503,7 +551,7 @@ export default function Home() {
                       className="flex w-full items-center justify-center gap-2 rounded-[8px] border border-white bg-gradient-to-b from-white to-[#bbc9e2] p-[17px] text-[16px] font-medium leading-[16px] text-black"
                     >
                       Quero fazer parte
-                      <img src="/boost-home/button-arrow.png" alt="" className="h-5 w-5" />
+                      <img src={asset('/boost-home/button-arrow.svg')} alt="" className="h-5 w-5" />
                     </button>
                   </form>
 
@@ -529,7 +577,7 @@ export default function Home() {
             </div>
 
             <a href="#top" className="flex h-[50px] w-[50px] items-center justify-center">
-              <img src="/boost-home/footer-icon.webp" alt="" className="h-[50px] w-[50px]" />
+              <img src={asset('/boost-home/footer-icon.webp')} alt="" className="h-[50px] w-[50px]" />
             </a>
 
             <div className="flex gap-[50px]">
@@ -567,7 +615,7 @@ export default function Home() {
 
             <div className="overflow-hidden pb-[6px]">
               <img
-                src="/boost-home/footer-wordmark.png"
+                src={asset('/boost-home/footer-wordmark.svg')}
                 alt=""
                 className="mx-auto w-full max-w-[1276.14px] opacity-100"
               />

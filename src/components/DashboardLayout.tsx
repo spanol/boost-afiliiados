@@ -10,9 +10,6 @@ import {
   LogOut, 
   Menu, 
   X, 
-  ChevronRight,
-  TrendingUp,
-  Inbox,
   Sun,
   Moon,
   Users
@@ -20,6 +17,8 @@ import {
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { useTheme } from '../contexts/ThemeContext';
+
+const boostLogo = `${import.meta.env.BASE_URL}boost-home/logo.svg`;
 
 export default function DashboardLayout() {
   const { profile } = useAuth();
@@ -64,12 +63,11 @@ export default function DashboardLayout() {
     <div className="flex flex-col h-full bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800">
       <div className="p-6 pb-2">
         <Link to="/" className="flex items-center gap-2 group">
-          <div className="w-6 h-6 bg-brand rounded flex items-center justify-center">
-            <TrendingUp className="text-white" size={14} />
-          </div>
-          <h1 className="text-sm font-black tracking-tighter text-slate-900 dark:text-white uppercase">
-            PREVIMARKET
-          </h1>
+          <img
+            src={boostLogo}
+            alt="Boost"
+            className="h-[24px] w-auto"
+          />
         </Link>
       </div>
 
