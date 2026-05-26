@@ -665,13 +665,8 @@ export default function Home() {
           <div className="mx-auto max-w-[1140px]">
             <div className="flex justify-center">
               <div className="relative h-[120px] w-[120px] overflow-hidden">
-                <img src={asset('/boost-home/boost-icon.webp')} alt="" className="absolute inset-0 h-full w-full" />
-                <div className="absolute inset-[10.52%_10.24%_9.48%_11.57%] bg-gradient-to-b from-[#19202e] to-[#101724]" />
-                <img
-                  src={asset('/boost-home/favicon.png')}
-                  alt=""
-                  className="absolute inset-[19.61%_22.59%_20.04%_16.12%] h-auto w-auto"
-                />
+                <img src={asset('/boost-home/favicon.svg')} alt="" className="inset-0 h-full w-full object-cover" />
+                <div className="inset-[10.52%_10.24%_9.48%_11.57%] bg-gradient-to-b from-[#19202e] to-[#101724]" />
               </div>
             </div>
 
@@ -831,8 +826,8 @@ export default function Home() {
               ))}
             </div>
 
-            <a href="#top" className="flex h-[50px] w-[50px] items-center justify-center">
-              <img src={asset('/boost-home/footer-icon.webp')} alt="" className="h-[50px] w-[50px]" />
+            <a href="#top" className="flex h-[60px] w-[60px] items-center justify-center">
+              <img src={asset('/boost-home/favicon.svg')} alt="" className="h-[40px] w-[40px] object-contain opacity-90" />
             </a>
 
             <div className="flex gap-[50px]">
@@ -868,11 +863,11 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="overflow-hidden pb-[6px]">
+            <div className="overflow-hidden pb-[6px] w-full">
               <img
                 src={asset('/boost-home/logo.svg')}
                 alt=""
-                className="mx-auto w-full max-w-[1276.14px] opacity-100"
+                className="block w-full h-auto opacity-10 object-contain"
               />
             </div>
           </div>

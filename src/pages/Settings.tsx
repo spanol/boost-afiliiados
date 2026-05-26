@@ -126,7 +126,7 @@ export default function Settings() {
                     className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-sm dark:text-white focus:ring-1 focus:ring-brand transition-all outline-none"
                   />
                   <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                    <ShieldCheck size={16} className="text-slate-300 dark:text-slate-600" title="Armazenamento Seguro" />
+                    <ShieldCheck size={16} className="text-slate-300 dark:text-slate-600" aria-label="Armazenamento Seguro" />
                   </div>
                 </div>
               </div>
