@@ -32,7 +32,8 @@ import {
   fetchAffiliateConfigs,
   AffiliateConfig,
   createUser,
-  createAccessInvite
+  createAccessInvite,
+  isUserRegistered
 } from '../services/affiliateService';
 import { useAuth } from '../contexts/AuthContext';
 import BrandBreakdown from '../components/BrandBreakdown';
@@ -57,6 +58,8 @@ export default function AffiliateDetails() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [range, setRange] = useState<DateRange>(() => getDefaultRange());
+  // Cadastro próprio: o afiliado já criou acesso (existe users/{uid} com este affiliateId)?
+  const [hasAccount, setHasAccount] = useState(false);
 
   // User Modal State
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
@@ -96,6 +99,16 @@ export default function AffiliateDetails() {
       setBrandResults(Array.isArray(brandData) ? brandData : []);
       setDailyResults(Array.isArray(dailyData) ? dailyData : []);
       setConfig(allConfigs[affId] || null);
+
+      // Cadastro próprio: para admin, consultamos se existe conta vinculada ao
+      // affiliateId (a query em `users` exige admin nas regras). Para o próprio
+      // afiliado vendo seu painel, ele está logado → por definição já é cadastrado.
+      if (isAdmin) {
+        setHasAccount(await isUserRegistered(affId).catch(() => false));
+      } else {
+        setHasAccount(true);
+      }
+
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao carregar detalhes');
@@ -211,14 +224,32 @@ export default function AffiliateDetails() {
               <h1 className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">
                 {affiliate.name || affiliate.label || 'Sem Nome'}
               </h1>
-              <span className={cn(
-                "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider",
-                (affiliate.status === 'active' || affiliate.status === 'Ativo' || affiliate.status === 1) 
-                  ? "bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400" 
-                  : "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400"
-              )}>
-                {affiliate.status || 'Pendente'}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className={cn(
+                  "px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider",
+                  hasAccount
+                    ? "bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400"
+                    : "bg-yellow-100 dark:bg-yellow-900/30 text-yellow-600 dark:text-yellow-400"
+                )}>
+                  {hasAccount ? 'Cadastrado' : 'Pendente'}
+                </span>
+                <span className="relative group inline-flex">
+                  <button
+                    type="button"
+                    aria-label="O que significa esta etiqueta?"
+                    className="text-slate-400 hover:text-brand focus:text-brand outline-none transition-colors"
+                  >
+                    <HelpCircle size={14} />
+                  </button>
+                  <span
+                    role="tooltip"
+                    className="pointer-events-none absolute left-1/2 top-full z-30 mt-2 w-64 -translate-x-1/2 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 text-[11px] font-medium normal-case leading-relaxed text-slate-600 dark:text-slate-300 shadow-xl opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
+                  >
+                    <strong className="text-green-600 dark:text-green-400">Cadastrado</strong>: o afiliado já criou o próprio acesso à plataforma.{' '}
+                    <strong className="text-yellow-600 dark:text-yellow-400">Pendente</strong>: ainda não se registrou — gere um convite ou cadastre o usuário.
+                  </span>
+                </span>
+              </div>
             </div>
             <p className="text-slate-500 font-mono text-xs uppercase tracking-widest mt-1">ID Externo: #{affiliate.id}</p>
           </div>
