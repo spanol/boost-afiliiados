@@ -9,7 +9,8 @@ import {
   HelpCircle,
   UserPlus,
   Wallet,
-  Target
+  Target,
+  Banknote
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -42,7 +43,8 @@ export default function AdminDashboard() {
     // Funil agregado da rede (mesmos dados que antes só apareciam por afiliado).
     registrations: 0,
     firstDeposits: 0,
-    qualifiedCpa: 0
+    qualifiedCpa: 0,
+    deposit: 0
   });
   // B1 · lucro líquido consolidado do período (comissão das casas − repasse aos afiliados).
   const [netProfit, setNetProfit] = useState(0);
@@ -72,8 +74,11 @@ export default function AdminDashboard() {
           rev: acc.rev + (curr.rvs || 0),
           registrations: acc.registrations + (curr.registrations || 0),
           firstDeposits: acc.firstDeposits + (curr.first_deposits || 0),
-          qualifiedCpa: acc.qualifiedCpa + (curr.qualified_cpa || 0)
-        }), { commission: 0, cpa: 0, rev: 0, registrations: 0, firstDeposits: 0, qualifiedCpa: 0 });
+          qualifiedCpa: acc.qualifiedCpa + (curr.qualified_cpa || 0),
+          // valor depositado (R$). Campo `deposit` do results (ver BACKLOG · Depósitos);
+          // se a casa reportar com outro nome, ajustar aqui ao validar com dados reais.
+          deposit: acc.deposit + (curr.deposit || 0)
+        }), { commission: 0, cpa: 0, rev: 0, registrations: 0, firstDeposits: 0, qualifiedCpa: 0, deposit: 0 });
 
         setTotals(calculatedTotals);
 
@@ -86,7 +91,7 @@ export default function AdminDashboard() {
       } catch (err) {
         console.error('Error fetching dashboard data:', err);
         setResults([]);
-        setTotals({ commission: 0, cpa: 0, rev: 0, registrations: 0, firstDeposits: 0, qualifiedCpa: 0 });
+        setTotals({ commission: 0, cpa: 0, rev: 0, registrations: 0, firstDeposits: 0, qualifiedCpa: 0, deposit: 0 });
         setNetProfit(0);
       } finally {
         setLoading(false);
@@ -106,6 +111,7 @@ export default function AdminDashboard() {
   const funnel = [
     { label: 'Cadastros', value: totals.registrations.toLocaleString('pt-BR'), icon: UserPlus },
     { label: 'Primeiros Depósitos', value: totals.firstDeposits.toLocaleString('pt-BR'), icon: Wallet },
+    { label: 'Valor Depositado', value: `R$ ${totals.deposit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: Banknote },
     { label: 'CPA Qualificado', value: totals.qualifiedCpa.toLocaleString('pt-BR'), icon: Target },
   ];
 
@@ -225,7 +231,7 @@ export default function AdminDashboard() {
         <h3 className="text-[10px] uppercase font-bold tracking-widest text-slate-400 dark:text-neutral-500 mb-3 px-1">
           Funil da rede (todos os afiliados)
         </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {funnel.map((item, idx) => (
             <motion.div
               key={item.label}
