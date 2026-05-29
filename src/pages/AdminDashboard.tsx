@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { 
-  Users, 
-  DollarSign, 
-  BarChart3, 
+  Users,
+  DollarSign,
+  BarChart3,
   TrendingUp,
   Loader2,
-  HelpCircle
+  HelpCircle,
+  UserPlus,
+  Wallet,
+  Target
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -35,7 +38,11 @@ export default function AdminDashboard() {
   const [totals, setTotals] = useState({
     commission: 0,
     cpa: 0,
-    rev: 0
+    rev: 0,
+    // Funil agregado da rede (mesmos dados que antes só apareciam por afiliado).
+    registrations: 0,
+    firstDeposits: 0,
+    qualifiedCpa: 0
   });
   // B1 · lucro líquido consolidado do período (comissão das casas − repasse aos afiliados).
   const [netProfit, setNetProfit] = useState(0);
@@ -58,12 +65,15 @@ export default function AdminDashboard() {
         ]);
         setResults(allResults);
 
-        // Calculate totals
+        // Calculate totals (financeiro + funil agregado da rede)
         const calculatedTotals = allResults.reduce((acc, curr) => ({
           commission: acc.commission + (curr.total_commission || 0),
           cpa: acc.cpa + (curr.cpa || 0),
-          rev: acc.rev + (curr.rvs || 0)
-        }), { commission: 0, cpa: 0, rev: 0 });
+          rev: acc.rev + (curr.rvs || 0),
+          registrations: acc.registrations + (curr.registrations || 0),
+          firstDeposits: acc.firstDeposits + (curr.first_deposits || 0),
+          qualifiedCpa: acc.qualifiedCpa + (curr.qualified_cpa || 0)
+        }), { commission: 0, cpa: 0, rev: 0, registrations: 0, firstDeposits: 0, qualifiedCpa: 0 });
 
         setTotals(calculatedTotals);
 
@@ -76,7 +86,7 @@ export default function AdminDashboard() {
       } catch (err) {
         console.error('Error fetching dashboard data:', err);
         setResults([]);
-        setTotals({ commission: 0, cpa: 0, rev: 0 });
+        setTotals({ commission: 0, cpa: 0, rev: 0, registrations: 0, firstDeposits: 0, qualifiedCpa: 0 });
         setNetProfit(0);
       } finally {
         setLoading(false);
@@ -90,6 +100,13 @@ export default function AdminDashboard() {
     { label: 'Total comissão', value: `R$ ${totals.commission.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: DollarSign, color: 'green' },
     { label: 'Total CPA', value: `R$ ${totals.cpa.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: BarChart3, color: 'blue' },
     { label: 'Total REV', value: `R$ ${totals.rev.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, icon: TrendingUp, color: 'purple' },
+  ];
+
+  // Funil agregado da rede — soma dos dados que antes só apareciam ao abrir um afiliado.
+  const funnel = [
+    { label: 'Cadastros', value: totals.registrations.toLocaleString('pt-BR'), icon: UserPlus },
+    { label: 'Primeiros Depósitos', value: totals.firstDeposits.toLocaleString('pt-BR'), icon: Wallet },
+    { label: 'CPA Qualificado', value: totals.qualifiedCpa.toLocaleString('pt-BR'), icon: Target },
   ];
 
   // Prepare data for the chart - top 10 affiliates by commission
@@ -201,6 +218,45 @@ export default function AdminDashboard() {
           </motion.div>
         ))}
       </div>
+
+      {/* Funil agregado da rede — dados (Cadastros, Depósitos, CPA) de TODOS os afiliados
+          do master, somados; antes só apareciam ao abrir um afiliado individual. */}
+      <section>
+        <h3 className="text-[10px] uppercase font-bold tracking-widest text-slate-400 dark:text-neutral-500 mb-3 px-1">
+          Funil da rede (todos os afiliados)
+        </h3>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+          {funnel.map((item, idx) => (
+            <motion.div
+              key={item.label}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: idx * 0.05 }}
+              className="group p-6 rounded-2xl border bg-white dark:bg-neutral-900/60 border-slate-200/70 dark:border-neutral-800 shadow-sm hover:border-slate-300 dark:hover:border-neutral-700 transition-all"
+            >
+              {loading ? (
+                <div className="flex items-center justify-center h-20">
+                  <Loader2 className="animate-spin text-brand dark:text-white" />
+                </div>
+              ) : (
+                <>
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="p-2.5 rounded-xl border bg-slate-50 dark:bg-neutral-800/60 border-slate-100 dark:border-neutral-700/60 transition-transform group-hover:scale-105">
+                      <item.icon size={20} className="text-slate-900 dark:text-neutral-100" />
+                    </div>
+                  </div>
+                  <p className="text-[10px] uppercase font-bold tracking-widest mb-1.5 text-slate-400 dark:text-neutral-500">
+                    {item.label}
+                  </p>
+                  <h3 className="text-2xl font-bold tracking-tight truncate text-slate-900 dark:text-white">
+                    {item.value}
+                  </h3>
+                </>
+              )}
+            </motion.div>
+          ))}
+        </div>
+      </section>
 
       {/* B1 · Lucro líquido (regra provisória — ver comentário em affiliateService.calcNetProfit) */}
       <motion.div
