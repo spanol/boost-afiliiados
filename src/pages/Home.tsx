@@ -1,535 +1,621 @@
-import { useState, type ReactNode } from 'react';
+import { useState, type FormEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
+import { motion, AnimatePresence } from 'motion/react';
+import {
+  Menu,
+  X,
+  ChevronRight,
+  BarChart3,
+  Users,
+  ShieldCheck,
+  ArrowRightLeft,
+  Target,
+  MonitorPlay,
+  Lock,
+  MoveRight,
+  Loader2,
+  CheckCircle2,
+} from 'lucide-react';
+import { cn } from '../lib/utils';
+import { createContactInquiry, type ContactInquiryInput } from '../services/contactService';
+import { useToast } from '../contexts/ToastContext';
 
 const asset = (path: string) => `${import.meta.env.BASE_URL}${path.replace(/^\/+/, '')}`;
-type DashboardTab = 'desktop' | 'mobile';
 
-const stats = [
-  {
-    icon: asset('/boost-home/stat-icon-1-fill.svg'),
-    mask: true,
-    value: '+12.000',
-    label: 'Afiliados',
-  },
-  {
-    icon: asset('/boost-home/stat-icon-2-fill.svg'),
-    mask: true,
-    value: '+200.000 / Mês',
-    label: 'Usuários cadastrados',
-  },
-  {
-    icon: asset('/boost-home/stat-icon-3.svg'),
-    value: '+120.000 / Mês',
-    label: 'FTDs',
-  },
-  {
-    icon: asset('/boost-home/stat-icon-4.svg'),
-    value: '+100.000 / Mês',
-    label: 'CPAs qualificados',
-  },
-];
-
-const genericPainPoints = [
-  'Dados fragmentados',
-  'Baixa flexibilidade',
-  'Dependência de terceiros',
-  'Decisões lentas',
-];
-
-const boostAdvantages = [
-  {
-    title: 'Deals',
-    description: 'Os melhores deals do mercado brasileiro.',
-  },
-  {
-    title: 'Plataforma própria',
-    description: 'Sem limitações de ferramentas externas.',
-  },
-  {
-    title: 'Controle total',
-    description: 'Você no comando de toda a operação.',
-  },
-  {
-    title: 'Decisões rápidas',
-    description: 'Aja no momento certo, com precisão.',
-  },
-  {
-    title: 'Account manager',
-    description: 'Suporte 24h para apoio estratégico, rapido e eficaz.',
-  },
-  {
-    title: 'Performance recompensada',
-    description: 'Prêmios como Porche, BMW, Viagens entre outros.',
-  },
-];
-
-const featureCards = [
-  {
-    title: ['Autenticação e', 'Controle de Acesso'],
-    description: ['Segurança com', 'acessos personalizados.'],
-    image: asset('/boost-home/feature-1.webp'),
-    imageClassName: 'w-[366px]',
-    containerClassName:
-      'justify-between bg-[radial-gradient(circle_at_top_left,_#cfddf6_0%,_#98aed4_50%,_#607eb2_100%)] pb-[71px]',
-  },
-  {
-    title: ['Gestão de', 'Usuários'],
-    description: ['Controle total de', 'parceiros e equipes.'],
-    image: asset('/boost-home/feature-2.webp'),
-    imageClassName: 'absolute bottom-[-2px] right-0 w-[409px]',
-    containerClassName:
-      'overflow-hidden bg-[radial-gradient(circle_at_top_left,_#cfddf6_0%,_#98aed4_50%,_#607eb2_100%)]',
-  },
-  {
-    title: ['Tenha Dashboards', 'Otimizados'],
-    description: ['Dados na palma da sua', 'mão para decisões rápidas.'],
-    image: asset('/boost-home/feature-3.webp'),
-    imageClassName: 'absolute bottom-[-2px] right-0 w-[500px]',
-    containerClassName:
-      'overflow-hidden bg-[radial-gradient(circle_at_top_left,_#cfddf6_0%,_#98aed4_50%,_#607eb2_100%)]',
-  },
-  {
-    title: ['Modo Administrativo', 'Contextual'],
-    description: ['Gestão estratégica', 'da operação.'],
-    image: asset('/boost-home/feature-4.png'),
-    imageClassName: 'absolute bottom-0 left-[77px] w-[375px]',
-    containerClassName:
-      'overflow-hidden bg-[radial-gradient(circle_at_top_left,_#cfddf6_0%,_#98aed4_50%,_#607eb2_100%)]',
-  },
-];
-
-const qualificationItems = [
-  ['Opera com volume', 'significativo.'],
-  ['Busca controle', 'e transparência.'],
-  ['Quer escalar', 'com inteligência.'],
-];
-
-const footerLinksLeft = [
-  { label: 'Sobre', href: '#sobre' },
-  { label: 'Plataforma', href: '#plataforma' },
-];
-
-const footerLinksRight = [
-  { label: 'Funcionalidades', href: '#funcionalidades' },
-  { label: 'Entrar', href: '/login' },
-];
-
-function SectionTag({ children, dark = false }: { children: string; dark?: boolean }) {
-  return (
-    <div
-      className={[
-        'rounded-[24px] border px-[17px] py-[9px] text-center text-[12px] leading-[18px]',
-        dark
-          ? 'border-white/5 bg-[#210e1a] text-white'
-          : 'border-white/10 bg-gradient-to-b from-transparent to-white/10 text-white',
-      ].join(' ')}
-    >
-      {children}
-    </div>
-  );
-}
-
-function WhiteButton({
-  children,
-  to,
-  href,
-  className = '',
-}: {
-  children: ReactNode;
-  to?: string;
-  href?: string;
-  className?: string;
-}) {
-  const classes =
-    'inline-flex items-center justify-center rounded-[8px] border border-white bg-gradient-to-b from-white to-[#bbc9e2] px-[17px] py-[13px] text-[14px] font-medium leading-[14px] text-black';
-
-  if (to) {
-    return (
-      <Link to={to} className={`${classes} ${className}`.trim()}>
-        {children}
-      </Link>
-    );
-  }
-
-  return (
-    <a href={href} className={`${classes} ${className}`.trim()}>
-      {children}
-    </a>
-  );
-}
+const emptyForm: ContactInquiryInput = {
+  name: '',
+  email: '',
+  phone: '',
+  instagram: '',
+  affiliateExperience: 'sim',
+  presentation: '',
+};
 
 export default function Home() {
-  const [dashboardTab, setDashboardTab] = useState<DashboardTab>('desktop');
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [form, setForm] = useState<ContactInquiryInput>(emptyForm);
+  const [status, setStatus] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
+  const { push } = useToast();
+
+  const updateField = <K extends keyof ContactInquiryInput>(key: K, value: ContactInquiryInput[K]) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (status === 'submitting') return;
+
+    setStatus('submitting');
+    try {
+      await createContactInquiry({
+        ...form,
+        name: form.name.trim(),
+        email: form.email.trim(),
+        phone: form.phone.trim(),
+        instagram: form.instagram.trim(),
+        presentation: form.presentation.trim(),
+      });
+      setStatus('success');
+      setForm(emptyForm);
+      push({ type: 'success', message: 'Aplicação enviada! Nosso time entrará em contato.' });
+    } catch (error) {
+      console.error('Falha ao enviar aplicação de afiliado', error);
+      setStatus('error');
+      push({ type: 'error', message: 'Não foi possível enviar. Tente novamente em instantes.' });
+    }
+  };
 
   return (
-    <div id="top" className="min-h-screen bg-[#050c1a] text-white">
-      <header className="sticky top-0 z-50 border-b border-white/8 bg-[#141c2a]">
-        <div className="mx-auto flex h-[70px] w-full max-w-[1048px] items-center justify-between gap-8 px-6 xl:px-0">
-          <img
-            src={asset('/boost-home/logo.svg')}
-            alt="Boost"
-            className="h-[24.67px] w-[99.73px] shrink-0"
-          />
+    <div className="min-h-screen bg-neutral-950 text-neutral-400 font-sans selection:bg-white selection:text-neutral-950 pb-20">
+      {/* Dynamic background */}
+      <div className="fixed inset-0 z-0 pointer-events-none bg-grid-white opacity-[0.03]" />
+      <div className="fixed top-[-20%] left-[-10%] w-[50%] h-[50%] rounded-full bg-white/5 blur-[120px] pointer-events-none" />
+      <div className="fixed bottom-[-20%] right-[-10%] w-[50%] h-[50%] rounded-full bg-white/5 blur-[120px] pointer-events-none" />
 
-          <nav className="hidden items-center gap-[42px] text-[14px] font-medium leading-[21px] text-white lg:flex">
-            <a href="#sobre">Sobre</a>
-            <a href="#plataforma">Plataforma</a>
-            <a href="#funcionalidades">Funcionalidades</a>
-          </nav>
+      {/* Navigation */}
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-neutral-950/80 backdrop-blur-md border-b border-neutral-800/50">
+        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+          <Link to="/" className="flex items-center gap-2">
+            <img src={asset('boost-home/logo.svg')} alt="Boost" className="h-6 w-auto" />
+          </Link>
 
-          <div className="flex items-center gap-4">
+          <div className="hidden md:flex items-center gap-4">
             <Link
               to="/login"
-              className="rounded-[8px] border border-white/10 bg-gradient-to-b from-transparent to-white/10 px-[17px] py-[13.5px] text-center text-[12px] leading-[18px] text-white"
+              className="text-sm font-medium text-white hover:opacity-80 transition-opacity px-4 py-2"
             >
-              ENTRAR
+              Entrar
             </Link>
-            <WhiteButton to="/register">CADASTRAR</WhiteButton>
+            <Link
+              to="/register"
+              className="px-6 py-2.5 rounded-full bg-white text-neutral-950 font-bold text-sm hover:bg-neutral-200 transition-colors"
+            >
+              Cadastrar
+            </Link>
           </div>
+
+          <button
+            type="button"
+            className="md:hidden p-2 text-neutral-400 hover:text-white"
+            aria-label="Abrir menu"
+            onClick={() => setIsMobileMenuOpen((open) => !open)}
+          >
+            {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+          </button>
         </div>
-      </header>
 
-      <main>
-        <section className="px-6 pt-[53px] xl:px-0">
-          <div className="mx-auto max-w-[1140px]">
-            <div className="flex flex-col items-center pt-[62px] text-center">
-              <div className="mb-10">
-                <SectionTag>A Plataforma de Afiliados da Boost</SectionTag>
+        <AnimatePresence>
+          {isMobileMenuOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="md:hidden bg-neutral-900 border-b border-neutral-800 overflow-hidden"
+            >
+              <div className="p-6 flex flex-col gap-4">
+                <Link
+                  to="/login"
+                  className="text-base font-medium py-3 border-b border-neutral-800 text-left text-white"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  Entrar
+                </Link>
+                <Link
+                  to="/register"
+                  className="mt-2 px-5 py-3 rounded-xl bg-white text-neutral-950 text-center font-bold"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  Cadastrar
+                </Link>
               </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </nav>
 
-              <h1 className="text-[42px] font-medium leading-[1.1] tracking-[-1.6px] sm:text-[56px] xl:text-[70px] xl:leading-[80.5px]">
-                Seja um Afiliado Boost
-              </h1>
+      <main className="relative z-10 pt-32 pb-16">
+        {/* Hero */}
+        <section
+          id="inicio"
+          className="max-w-7xl mx-auto px-6 pt-16 md:pt-24 lg:pt-32 flex flex-col items-center text-center"
+        >
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6 }}
+            className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-neutral-300 text-xs font-medium mb-8 uppercase tracking-wider"
+          >
+            <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+            Performance Analytics & Growth
+          </motion.div>
 
-              <p className="mt-10 max-w-[614px] text-[18px] leading-[1.5] text-[#b4bcd0] sm:text-[21px] sm:leading-[31.5px]">
-                Acesso ao melhor <strong>ecossistema</strong>, aos melhores{' '}
-                <strong>Deals</strong>, controle total dos seus dados e ferramentas para
-                escalar sem limite.
-              </p>
+          <motion.h1
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.1 }}
+            className="text-5xl md:text-7xl font-bold tracking-tighter text-white max-w-4xl leading-[1.1]"
+          >
+            Escala inteligente <span className="text-neutral-400">para Afiliados</span>
+          </motion.h1>
 
-              <WhiteButton to="/register" className="mt-10 gap-2">
+          <motion.p
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.2 }}
+            className="mt-6 text-lg md:text-xl text-neutral-400 max-w-2xl leading-relaxed"
+          >
+            Conecte-se a um ecossistema com dados, tecnologia e ferramentas que escalam sua
+            operação de verdade.
+          </motion.p>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, delay: 0.3 }}
+            className="mt-10 flex flex-col sm:flex-row gap-4"
+          >
+            <Link
+              to="/register"
+              className="px-8 py-4 rounded-full bg-white text-neutral-950 font-semibold hover:bg-neutral-200 transition-colors flex items-center justify-center gap-2 shadow-xl shadow-white/10 group"
+            >
+              Quero ser um Afiliado
+              <MoveRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+            </Link>
+          </motion.div>
+
+          {/* Dashboard mockup — real Boost screenshot framed in the designer's chrome */}
+          <motion.div
+            initial={{ opacity: 0, y: 40 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.5 }}
+            className="mt-24 w-full relative"
+          >
+            <div className="absolute inset-0 bg-gradient-to-t from-neutral-950 via-transparent to-transparent z-10 pointer-events-none" />
+            <div className="rounded-2xl md:rounded-[2rem] border border-neutral-800/60 bg-neutral-900/50 p-2 md:p-3 backdrop-blur-xl shadow-2xl relative overflow-hidden glow-white">
+              <div className="rounded-xl overflow-hidden border border-neutral-700/50 bg-neutral-950">
                 <img
-                  src={asset('/boost-home/hero-arrow.svg')}
-                  alt=""
-                  className="h-[14.02px] w-[14.24px]"
+                  src={asset('boost-home/dashboard-escuro.png')}
+                  alt="Plataforma Boost"
+                  className="w-full h-auto block"
                 />
-                Quero ser um Afiliado
-              </WhiteButton>
+              </div>
+            </div>
+          </motion.div>
+        </section>
+
+        {/* Stats */}
+        <section className="max-w-7xl mx-auto px-6 py-24 border-b border-neutral-800/50">
+          <div className="w-full max-w-[1300px] mx-auto mb-16 text-center">
+            <h3 className="text-2xl md:text-3xl font-bold text-white mb-3 flex items-center justify-center">
+              Para Afiliados
+            </h3>
+            <p className="text-lg text-neutral-400">
+              que querem escalar com controle, margem e velocidade.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
+            <StatCard icon={<Users className="w-6 h-6 text-neutral-400" />} value="+12.000" label="Afiliados" />
+            <StatCard
+              icon={<MonitorPlay className="w-6 h-6 text-neutral-400" />}
+              value="+200k/mês"
+              label="Usuários Cadastrados"
+            />
+            <StatCard
+              icon={<ArrowRightLeft className="w-6 h-6 text-neutral-400" />}
+              value="+120k/mês"
+              label="FTDs"
+            />
+            <StatCard
+              icon={<Target className="w-6 h-6 text-neutral-400" />}
+              value="+100k/mês"
+              label="CPAs Qualificados"
+            />
+          </div>
+        </section>
+
+        {/* Why migrate */}
+        <section id="sobre" className="max-w-7xl mx-auto px-6 py-24 md:py-32">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl md:text-5xl font-bold tracking-tight mb-4">
+              Afiliados de alta performance <span className="text-neutral-500">estão migrando</span>
+            </h2>
+            <p className="text-neutral-400 text-lg max-w-2xl mx-auto">
+              Operações amadoras perdem dinheiro com ferramentas genéricas. A Boost foi construída
+              para quem busca controle absoluto.
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-2 gap-12 lg:gap-24 items-center">
+            {/* Generic tools */}
+            <div className="space-y-6">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-white/5 border border-white/10 text-neutral-400 text-sm font-semibold uppercase tracking-wider mb-2">
+                Ferramentas Genéricas
+              </div>
+              <ul className="space-y-6">
+                {[
+                  'Dados fragmentados e não confiáveis',
+                  'Baixa flexibilidade para customizar deals',
+                  'Decisões lentas por falta de visibilidade',
+                  'Dependência de plataformas de terceiros',
+                ].map((item) => (
+                  <li key={item} className="flex items-start gap-4 text-neutral-500">
+                    <div className="w-6 h-6 rounded-full bg-neutral-900 flex items-center justify-center shrink-0 mt-0.5 border border-neutral-800">
+                      <X className="w-4 h-4 text-neutral-500" />
+                    </div>
+                    <span className="text-lg">{item}</span>
+                  </li>
+                ))}
+              </ul>
             </div>
 
-            <div id="plataforma" className="mt-[158px]">
-              <img
-                src={asset('/boost-home/dashboard-escuro.png')}
-                alt="Plataforma Boost"
-                className="mx-auto w-full max-w-[1048px]"
+            {/* Boost standard */}
+            <div className="bg-neutral-900 rounded-3xl p-8 lg:p-12 border border-neutral-800 shadow-2xl relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full blur-3xl -mr-10 -mt-10 group-hover:bg-white/10 transition-colors duration-500" />
+
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-white/5 border border-white/10 text-neutral-200 text-sm font-semibold uppercase tracking-wider mb-8 relative">
+                O Padrão Boost
+              </div>
+
+              <ul className="space-y-6 relative">
+                {[
+                  { title: 'Plataforma Própria', desc: 'Sem limitações de ferramentas externas.' },
+                  {
+                    title: 'Controle Total',
+                    desc: 'Você no comando de toda a operação e fluxo de dados.',
+                  },
+                  { title: 'Decisões Rápidas', desc: 'Aja no momento certo com precisão analítica.' },
+                  {
+                    title: 'Performance Recompensada',
+                    desc: 'Prêmios (Porsche, BMW, Viagens) para top performers.',
+                  },
+                  { title: 'Account Manager', desc: 'Suporte 24h para apoio estratégico e eficaz.' },
+                ].map((item) => (
+                  <li key={item.title} className="flex items-start gap-4">
+                    <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center shrink-0 mt-0.5 border border-white/10 text-white">
+                      <ChevronRight className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-lg font-semibold text-white">{item.title}</h4>
+                      <p className="text-neutral-400 mt-1">{item.desc}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        {/* Core features */}
+        <section
+          id="funcionalidades"
+          className="py-24 md:py-32 bg-neutral-900/50 border-y border-neutral-800/50"
+        >
+          <div className="max-w-7xl mx-auto px-6">
+            <div className="max-w-3xl mb-16">
+              <h2 className="text-3xl md:text-5xl font-bold tracking-tight mb-6">
+                A Boost centraliza seus dados e{' '}
+                <span className="text-neutral-500">entrega inteligência</span>
+              </h2>
+              <p className="text-xl text-neutral-400 leading-relaxed">
+                Decisões que realmente impactam o seu resultado só acontecem com as ferramentas
+                certas na mão.
+              </p>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-6 lg:gap-8">
+              <FeatureCard
+                icon={<Lock className="w-5 h-5 text-neutral-400" />}
+                title="Autenticação e Controle de Acesso"
+                desc="Segurança avançada com acessos granulares e personalizados."
+                image={asset('boost-home/feature-1.webp')}
+                delay={0.1}
+              />
+              <FeatureCard
+                icon={<Users className="w-5 h-5 text-neutral-400" />}
+                title="Gestão de Usuários"
+                desc="Controle total sobre parceiros, sub-afiliados e equipes."
+                image={asset('boost-home/feature-2.webp')}
+                delay={0.2}
+              />
+              <FeatureCard
+                icon={<BarChart3 className="w-5 h-5 text-neutral-400" />}
+                title="Dashboards Otimizados"
+                desc="Dados precisos na palma da sua mão, em tempo real, para leitura rápida."
+                image={asset('boost-home/feature-3.webp')}
+                delay={0.3}
+              />
+              <FeatureCard
+                icon={<ShieldCheck className="w-5 h-5 text-neutral-400" />}
+                title="Modo Administrativo Contextual"
+                desc="Gestão estratégica focada nos fluxos críticos do iGaming."
+                image={asset('boost-home/feature-4.png')}
+                delay={0.4}
               />
             </div>
           </div>
         </section>
 
-        <section className="px-6 py-[109px] xl:px-0">
-          <div className="mx-auto max-w-[1200px]">
-            <div className="text-center">
-              <p className="text-[21px] font-bold leading-[29.4px]">
-                Para afiliados
+        {/* Who is this for */}
+        <section className="max-w-4xl mx-auto px-6 py-24 md:py-32 text-center">
+          <h2 className="text-3xl md:text-4xl font-bold tracking-tight leading-tight mb-6">
+            Escala real para afiliados de performance.
+            <br className="hidden md:block" />
+            <span className="text-neutral-500">
+              Mais controle, mais clareza e decisões mais rápidas para transformar dados em
+              crescimento.
+            </span>
+          </h2>
+
+          <div className="mt-12 p-8 md:p-12 rounded-3xl bg-gradient-to-br from-neutral-900 to-neutral-900/50 border border-neutral-800 shadow-xl flex flex-col md:flex-row items-center justify-between gap-8 text-left">
+            <div>
+              <div className="w-12 h-12 bg-white/5 rounded-xl flex items-center justify-center mb-6">
+                <Target className="w-6 h-6 text-white" />
+              </div>
+              <h3 className="text-2xl font-bold text-white mb-2">Opera com volume significativo?</h3>
+              <p className="text-neutral-400">Busca controle, estabilidade e transparência.</p>
+            </div>
+
+            <a
+              href="#contato"
+              className="shrink-0 w-full md:w-auto px-8 py-4 rounded-xl bg-white text-neutral-950 font-bold text-lg text-center hover:bg-neutral-200 transition-transform active:scale-95"
+            >
+              Aplicar para Parceria
+            </a>
+          </div>
+        </section>
+
+        {/* Application form */}
+        <section
+          id="contato"
+          className="max-w-7xl mx-auto px-6 pt-16 pb-24 border-t border-neutral-800/50"
+        >
+          <div className="grid lg:grid-cols-2 gap-16 lg:gap-24">
+            <div>
+              <img
+                src={asset('boost-home/logo.svg')}
+                alt="Boost"
+                className="h-9 w-auto mb-8"
+              />
+              <h2 className="text-4xl md:text-5xl font-bold tracking-tight mb-6">
+                Seja agora um
                 <br />
-                <span className="font-normal text-[#b4bcd0]">
-                  que precisam de mais controle, margem e velocidade.
-                </span>
+                <span className="text-white">Afiliado Boost</span>
+              </h2>
+              <p className="text-lg text-neutral-400 mb-8 max-w-md">
+                Nosso time analisará o seu perfil. Preencha os dados abaixo e entraremos em contato
+                se houver fit.
               </p>
             </div>
 
-            <div className="mt-[70px] grid border-t border-[#333] md:grid-cols-4">
-              {stats.map((stat, index) => (
-                <div
-                  key={stat.label}
-                  className={[
-                    'px-3 py-[25px] text-center',
-                    index === 1 ? 'border-x border-[#cfdDF6]/10' : '',
-                    index === 2 ? 'border-r border-[#cfdDF6]/10' : '',
-                  ].join(' ')}
-                >
-                  <div className="flex justify-center">
-                    {stat.mask ? (
-                      <span
-                        className="block h-8 w-8 bg-cover bg-center"
-                        style={{
-                          WebkitMaskImage: `url(${asset('/boost-home/stat-mask.svg')})`,
-                          maskImage: `url(${asset('/boost-home/stat-mask.svg')})`,
-                          WebkitMaskRepeat: 'no-repeat',
-                          maskRepeat: 'no-repeat',
-                          WebkitMaskSize: 'contain',
-                          maskSize: 'contain',
-                          backgroundImage: `url(${stat.icon})`,
-                        }}
-                      />
-                    ) : (
-                      <img src={stat.icon} alt="" className="h-8 w-8" />
-                    )}
+            <div className="bg-neutral-900/50 rounded-3xl border border-neutral-800 p-8 pt-10 relative overflow-hidden backdrop-blur-sm">
+              {status === 'success' ? (
+                <div className="flex flex-col items-center justify-center text-center min-h-[420px] gap-5">
+                  <div className="w-16 h-16 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-center">
+                    <CheckCircle2 className="w-8 h-8 text-white" />
                   </div>
-                  <p className={[
-                    'pt-[17.25px] text-[16px] font-bold leading-[19.2px]',
-                    stat.label.toLowerCase().includes('cpa') ? 'text-white' : '',
-                  ].join(' ')}>
-                    {stat.value}
+                  <h3 className="text-2xl font-bold text-white">Aplicação enviada!</h3>
+                  <p className="text-neutral-400 max-w-sm">
+                    Recebemos os seus dados. Nosso time vai analisar o seu perfil e entrar em
+                    contato se houver fit.
                   </p>
-                  <p className={[
-                    'text-[16px] leading-[24px]',
-                    stat.label.toLowerCase().includes('cpa') ? 'text-white/90 font-medium' : 'text-[#273b5e]'
-                  ].join(' ')}>{stat.label}</p>
+                  <button
+                    type="button"
+                    onClick={() => setStatus('idle')}
+                    className="mt-2 text-sm font-medium text-white hover:opacity-80 transition-opacity"
+                  >
+                    Enviar outra aplicação
+                  </button>
                 </div>
-              ))}
-            </div>
-          </div>
-        </section>
+              ) : (
+                <form className="space-y-5" onSubmit={handleSubmit}>
+                  <Field label="Nome Completo">
+                    <input
+                      type="text"
+                      required
+                      value={form.name}
+                      onChange={(e) => updateField('name', e.target.value)}
+                      placeholder="Seu nome"
+                      className={inputClass}
+                    />
+                  </Field>
 
-        <section id="sobre" className="px-6 py-[66px] xl:px-0">
-          <div className="mx-auto max-w-[1140px]">
-            <div className="text-center">
-              <h2 className="text-[36px] font-medium leading-[1.2] text-white sm:text-[50px] sm:leading-[65px]">
-                Afiliados de alta performance
-                <br />
-                <span className="text-[#b4bcd0]">estão migrando</span>
-              </h2>
-            </div>
+                  <Field label="E-mail Profissional">
+                    <input
+                      type="email"
+                      required
+                      value={form.email}
+                      onChange={(e) => updateField('email', e.target.value)}
+                      placeholder="nome@email.com"
+                      className={inputClass}
+                    />
+                  </Field>
 
-            <div className="mt-11 flex justify-center">
-              <SectionTag dark>Ferramentas genéricas</SectionTag>
-            </div>
-
-            <div className="mt-11 flex flex-wrap items-center justify-center gap-x-10 gap-y-4 text-center">
-              {genericPainPoints.map((item) => (
-                <div key={item} className="flex items-center gap-2">
-                  <img src={asset('/boost-home/cross-red.svg')} alt="" className="h-6 w-6" />
-                  <span className="text-[16px] leading-[24px] text-[#4a5565]">{item}</span>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-[138px] border-t border-[#333] bg-[radial-gradient(ellipse_at_top,_rgba(115,159,239,0.1)_0%,_rgba(115,159,239,0)_70%)] pt-11">
-              <div className="flex justify-center">
-                <div className="rounded-[24px] border border-white bg-gradient-to-b from-white to-[#cfddf6] px-[17px] py-[9px] text-[12px] font-bold leading-[18px] text-black">
-                  BOOST ®
-                </div>
-              </div>
-
-              <div className="mx-auto mt-11 grid max-w-[762px] gap-x-8 gap-y-16 px-8 md:grid-cols-3">
-                {boostAdvantages.map((item) => (
-                  <div key={item.title} className="text-center">
-                    <div className="flex justify-center">
-                      <img src={asset('/boost-home/check-blue.svg')} alt="" className="h-6 w-6" />
-                    </div>
-                    <h3 className="pt-[15.25px] text-[16px] font-bold leading-[19.2px]">
-                      {item.title}
-                    </h3>
-                    <p className="mt-2 text-[16px] leading-[24px] text-[#314568]">
-                      {item.description}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section id="funcionalidades" className="px-6 py-[65px] xl:px-0">
-          <div className="mx-auto max-w-[1140px]">
-            <div className="text-center">
-              <h2 className="text-[24px] font-medium leading-[1.3] text-white sm:text-[29px] sm:leading-[37.7px]">
-                A BOOST centraliza seus dados e entrega
-                <br />
-                inteligência para decisões que realmente
-                <br />
-                impactam o resultado.
-              </h2>
-            </div>
-
-            <div className="mt-[66px] grid gap-6 lg:grid-cols-2">
-              {featureCards.map((card, index) => (
-                <article
-                  key={card.title.join(' ')}
-                  className={[
-                    'relative min-h-[500px] rounded-[20px] px-12 pt-[47.3px]',
-                    card.containerClassName,
-                  ].join(' ')}
-                >
-                  <div className={index === 1 ? 'max-w-[200px]' : index === 3 ? 'max-w-[240px]' : 'max-w-[300px]'}>
-                    <h3 className="text-[23px] font-bold leading-[27.6px] text-black">
-                      {card.title[0]}
-                      <br />
-                      {card.title[1]}
-                    </h3>
-                    <p className="mt-[11.45px] text-[16px] leading-[22.4px] text-black">
-                      {card.description[0]}
-                      <br />
-                      {card.description[1]}
-                    </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <Field label="Telefone / WhatsApp">
+                      <input
+                        type="tel"
+                        required
+                        value={form.phone}
+                        onChange={(e) => updateField('phone', e.target.value)}
+                        placeholder="(00) 00000-0000"
+                        className={inputClass}
+                      />
+                    </Field>
+                    <Field label="Instagram">
+                      <input
+                        type="text"
+                        value={form.instagram}
+                        onChange={(e) => updateField('instagram', e.target.value)}
+                        placeholder="@seuperfil"
+                        className={inputClass}
+                      />
+                    </Field>
                   </div>
 
-                  {index === 0 ? (
-                    <div className="flex justify-center pt-[86px]">
-                      <img src={card.image} alt="" className={card.imageClassName} />
-                    </div>
-                  ) : (
-                    <img src={card.image} alt="" className={card.imageClassName} />
+                  <Field label="Você já trabalha no mercado de afiliação?">
+                    <select
+                      value={form.affiliateExperience}
+                      onChange={(e) =>
+                        updateField('affiliateExperience', e.target.value as 'sim' | 'nao')
+                      }
+                      className={cn(inputClass, 'appearance-none')}
+                    >
+                      <option value="sim">Sim, já trabalho</option>
+                      <option value="nao">Não, quero começar</option>
+                    </select>
+                  </Field>
+
+                  <Field label="Apresente-se">
+                    <textarea
+                      rows={4}
+                      required
+                      value={form.presentation}
+                      onChange={(e) => updateField('presentation', e.target.value)}
+                      placeholder="Conte-nos sobre sua operação, volume atual de FTDs, focos de tráfego..."
+                      className={cn(inputClass, 'resize-none')}
+                    />
+                  </Field>
+
+                  {status === 'error' && (
+                    <p className="text-sm font-medium text-red-400">
+                      Não foi possível enviar a sua aplicação. Tente novamente.
+                    </p>
                   )}
 
-                  {index === 3 ? (
-                    <div className="absolute left-[88.73px] top-[301.27px] h-[43px] w-[186px] bg-[#fffffd]" />
-                  ) : null}
-                </article>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section className="px-6 pb-[49px] pt-[34px] xl:px-0">
-          <div className="mx-auto max-w-[1024px]">
-            <div className="text-center">
-              <h2 className="text-[36px] font-medium leading-[1.15] text-white sm:text-[50px] sm:leading-[55px]">
-                Clareza total
-                <br />
-                <span className="text-[#b4bcd0]">da sua operação</span>
-              </h2>
-
-              <h3 className="mt-[56.3px] text-[21px] font-bold leading-[25.2px]">
-                Dashboards pensados para quem vive de performance
-              </h3>
-              <p className="mt-[9.24px] text-[16px] leading-[19.2px] text-[#b4bcd0]">
-                Acompanhe KPIs, receitas, conversões e métricas críticas, com
-                visualizações limpas e objetivas.
-              </p>
-            </div>
-
-            <div className="mt-[70px]">
-              <div className="flex justify-center">
-                <div className="flex rounded-full border border-white p-[3px]">
                   <button
-                    type="button"
-                    onClick={() => setDashboardTab('desktop')}
-                    aria-pressed={dashboardTab === 'desktop'}
-                    className={[
-                      'flex items-center gap-[5px] rounded-full px-[17px] py-[9px] text-[12px] font-bold leading-[18px] transition',
-                      dashboardTab === 'desktop'
-                        ? 'border border-white bg-gradient-to-b from-white to-[#cfddf6] text-black shadow-[0_6px_16px_rgba(207,221,246,0.35)]'
-                        : 'border border-transparent text-white/75 hover:text-white',
-                    ].join(' ')}
+                    type="submit"
+                    disabled={status === 'submitting'}
+                    className="w-full px-8 py-4 rounded-xl bg-white text-neutral-950 font-bold text-lg hover:bg-neutral-200 transition-colors flex justify-center items-center gap-2 mt-4 disabled:opacity-60 disabled:cursor-not-allowed"
                   >
-                    <img src={asset('/boost-home/desktop-tab.svg')} alt="" className="h-3 w-3" />
-                    Desktop
+                    {status === 'submitting' ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        Enviando...
+                      </>
+                    ) : (
+                      'Quero fazer parte'
+                    )}
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => setDashboardTab('mobile')}
-                    aria-pressed={dashboardTab === 'mobile'}
-                    className={[
-                      'flex items-center gap-[5px] rounded-full px-[17px] py-[9px] text-[12px] font-bold leading-[18px] transition',
-                      dashboardTab === 'mobile'
-                        ? 'border border-white bg-gradient-to-b from-white to-[#cfddf6] text-black shadow-[0_6px_16px_rgba(207,221,246,0.35)]'
-                        : 'border border-transparent text-white/75 hover:text-white',
-                    ].join(' ')}
-                  >
-                    <img src={asset('/boost-home/mobile-tab.svg')} alt="" className="h-3 w-3" />
-                    Mobile
-                  </button>
-                </div>
-              </div>
-
-              <div className="mt-[70px]">
-                {dashboardTab === 'desktop' ? (
-                  <img
-                    src={asset('/boost-home/dashboard-claro.png')}
-                    alt="Dashboard Boost na versão desktop"
-                    className="w-full"
-                  />
-                ) : (
-                  <div className="flex justify-center">
-                    <div className="relative w-full max-w-[320px] rounded-[40px] border border-white/15 bg-[linear-gradient(180deg,#192334_0%,#0a1220_100%)] p-3 shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
-                      <div className="mb-3 flex justify-center">
-                        <div className="h-1.5 w-20 rounded-full bg-white/20" />
-                      </div>
-                      <div className="overflow-hidden rounded-[30px] border border-white/10 bg-[#0f1725]">
-                        <div className="h-[560px] overflow-hidden">
-                          <img
-                            src={asset('/boost-home/mobile-dash-1.png')}
-                            alt="Dashboard Boost na versão mobile"
-                            className="h-full w-full origin-top object-cover object-top"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
+                </form>
+              )}
             </div>
           </div>
         </section>
-
-        <section className="px-6 pb-[50px] pt-[449px] xl:px-0">
-          <div className="mx-auto max-w-[1140px]">
-            <div className="text-center text-[#cfddf6]">
-              <h2 className="text-[24px] font-medium leading-[1.3] sm:text-[29px] sm:leading-[37.7px]">
-                Isso não é para qualquer um.
-                <br />
-                É para afiliados com resultados consistentes que querem evoluir
-                <br />
-                sua estrutura e ter acesso aos melhores Deals do mercado.
-              </h2>
-            </div>
-
-            <div className="mx-auto mt-[60px] grid max-w-[685px] gap-12 md:grid-cols-3">
-              {qualificationItems.map((item) => (
-                <div key={item[0]} className="text-center">
-                  <div className="flex justify-center">
-                    <img src={asset('/boost-home/check-white.svg')} alt="" className="h-6 w-6" />
-                  </div>
-                  <h3 className="pt-[15.25px] text-[16px] font-bold leading-[19.2px] text-white">
-                    {item[0]}
-                  </h3>
-                  <p className="text-[16px] leading-[24px] text-[#314568]">{item[1]}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
       </main>
 
-      <footer className="border-t border-[#cfdDF6]/10 bg-[rgba(0,2,18,0.3)] px-6 pb-[100px] pt-[95px] backdrop-blur-[10px] xl:px-0">
-        <div className="mx-auto max-w-[1140px]">
-          <div className="flex flex-col items-center justify-center gap-10 lg:flex-row lg:gap-[100px]">
-            <div className="flex gap-[50px]">
-              {footerLinksLeft.map((item) => (
-                <a key={item.label} href={item.href} className="text-[14px] font-medium leading-[21px]">
-                  {item.label}
-                </a>
-              ))}
-            </div>
-
-            <a href="#top" className="flex h-[60px] w-[60px] items-center justify-center">
-              <img src={asset('/boost-home/favicon.svg')} alt="" className="h-[40px] w-[40px] object-contain opacity-90" />
-            </a>
-
-            <div className="flex gap-[50px]">
-              {footerLinksRight.map((item) => (
-                <a key={item.label} href={item.href} className="text-[14px] font-medium leading-[21px]">
-                  {item.label}
-                </a>
-              ))}
-            </div>
+      {/* Footer */}
+      <footer className="relative z-10 border-t border-neutral-800/50 bg-neutral-900/30">
+        <div className="max-w-7xl mx-auto px-6 py-12 flex flex-col md:flex-row justify-between items-center gap-6">
+          <div className="flex items-center gap-3">
+            <img src={asset('boost-home/logo.svg')} alt="Boost" className="h-6 w-auto opacity-80" />
+            <span className="font-display font-medium text-sm text-neutral-500">
+              &copy; {new Date().getFullYear()} Boost
+            </span>
           </div>
 
-          <div className="mt-24 flex flex-col gap-10">
-            <div className="overflow-hidden pb-[6px] w-full">
-              <img
-                src={asset('/boost-home/logo.svg')}
-                alt=""
-                className="block w-full h-auto opacity-10 object-contain"
-              />
-            </div>
+          <div className="flex gap-6 text-sm text-neutral-500">
+            <Link to="/login" className="hover:text-white transition-colors">
+              Entrar
+            </Link>
+            <Link to="/register" className="hover:text-white transition-colors">
+              Cadastrar
+            </Link>
           </div>
         </div>
       </footer>
     </div>
+  );
+}
+
+const inputClass =
+  'w-full px-4 py-3 rounded-xl bg-neutral-950/50 border border-neutral-800 focus:border-white focus:ring-1 focus:ring-white outline-none transition-all text-white placeholder:text-neutral-600';
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="space-y-2">
+      <label className="text-sm font-medium text-neutral-300">{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function StatCard({ icon, value, label }: { icon: ReactNode; value: string; label: string }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      className="flex flex-col gap-3 p-6 rounded-2xl bg-neutral-900/50 border border-neutral-800/50 group hover:border-neutral-700 hover:bg-neutral-800/50 transition-all"
+    >
+      <div className="w-12 h-12 rounded-xl bg-neutral-800/50 flex items-center justify-center border border-neutral-700/50 group-hover:scale-110 transition-transform">
+        {icon}
+      </div>
+      <div>
+        <div className="text-3xl font-display font-bold text-white mb-1">{value}</div>
+        <div className="text-sm text-neutral-400 font-medium">{label}</div>
+      </div>
+    </motion.div>
+  );
+}
+
+function FeatureCard({
+  icon,
+  title,
+  desc,
+  image,
+  delay,
+}: {
+  icon: ReactNode;
+  title: string;
+  desc: string;
+  image: string;
+  delay: number;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      transition={{ delay }}
+      className="rounded-3xl bg-neutral-900 border border-neutral-800 hover:border-neutral-700 transition-colors flex flex-col h-full group overflow-hidden"
+    >
+      <div className="p-8 pb-6">
+        <div className="w-12 h-12 rounded-xl bg-white/5 flex items-center justify-center mb-6 group-hover:bg-white/10 transition-colors border border-white/5">
+          {icon}
+        </div>
+        <h3 className="text-xl font-bold text-white mb-3">{title}</h3>
+        <p className="text-neutral-400 leading-relaxed">{desc}</p>
+      </div>
+      <div className="mt-auto px-8">
+        <div className="rounded-t-xl border-x border-t border-neutral-800/60 bg-neutral-950/40 overflow-hidden">
+          <img
+            src={image}
+            alt={title}
+            loading="lazy"
+            className="w-full h-44 object-cover object-top opacity-90 group-hover:opacity-100 transition-opacity"
+          />
+        </div>
+      </div>
+    </motion.div>
   );
 }
