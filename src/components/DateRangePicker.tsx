@@ -64,15 +64,15 @@ export default function DateRangePicker({ value, onChange, className }: DateRang
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl text-slate-700 dark:text-slate-300 hover:border-brand/40 transition-all font-bold text-xs uppercase tracking-wider shadow-sm"
+        className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 rounded-xl text-slate-700 dark:text-neutral-300 hover:border-amber-500/40 transition-all font-bold text-xs uppercase tracking-wider shadow-sm"
       >
-        <Calendar size={16} className="text-slate-500 dark:text-slate-400" />
+        <Calendar size={16} className="text-slate-500 dark:text-neutral-400" />
         <span className="normal-case tracking-normal font-semibold">{formatRangeLabel(value)}</span>
         <ChevronDown size={14} className={cn('text-slate-400 transition-transform', open && 'rotate-180')} />
       </button>
 
       {open && (
-        <div className="absolute right-0 z-50 mt-2 w-72 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl shadow-2xl p-3 space-y-1">
+        <div className="absolute right-0 z-50 mt-2 w-72 bg-white dark:bg-neutral-900 border border-slate-100 dark:border-neutral-800 rounded-2xl shadow-2xl p-3 space-y-1">
           {DATE_RANGE_PRESETS.filter((p) => p.id !== 'custom').map((preset) => {
             const isActive = activePreset === preset.id;
             return (
@@ -83,8 +83,8 @@ export default function DateRangePicker({ value, onChange, className }: DateRang
                 className={cn(
                   'w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm font-semibold transition-all text-left',
                   isActive
-                    ? 'bg-brand/10 text-brand'
-                    : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                    ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                    : 'text-slate-600 dark:text-neutral-300 hover:bg-slate-50 dark:hover:bg-white/5'
                 )}
               >
                 {preset.label}
@@ -93,30 +93,30 @@ export default function DateRangePicker({ value, onChange, className }: DateRang
             );
           })}
 
-          <div className="pt-2 mt-1 border-t border-slate-100 dark:border-slate-800 space-y-2">
-            <p className="px-1 text-[10px] font-black text-slate-400 uppercase tracking-widest">Personalizado</p>
+          <div className="pt-2 mt-1 border-t border-slate-100 dark:border-neutral-800 space-y-2">
+            <p className="px-1 text-[10px] font-black text-slate-400 dark:text-neutral-500 uppercase tracking-widest">Personalizado</p>
             <div className="flex items-center gap-2">
               <input
                 type="date"
                 value={draftStart}
                 max={draftEnd || undefined}
                 onChange={(e) => setDraftStart(e.target.value)}
-                className="flex-1 min-w-0 px-2 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-lg text-xs font-semibold outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand dark:text-white"
+                className="flex-1 min-w-0 px-2 py-2 bg-slate-50 dark:bg-neutral-800 border border-slate-100 dark:border-neutral-700 rounded-lg text-xs font-semibold outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 dark:text-white"
               />
-              <span className="text-slate-400 text-xs">–</span>
+              <span className="text-slate-400 dark:text-neutral-500 text-xs">–</span>
               <input
                 type="date"
                 value={draftEnd}
                 min={draftStart || undefined}
                 onChange={(e) => setDraftEnd(e.target.value)}
-                className="flex-1 min-w-0 px-2 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-lg text-xs font-semibold outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand dark:text-white"
+                className="flex-1 min-w-0 px-2 py-2 bg-slate-50 dark:bg-neutral-800 border border-slate-100 dark:border-neutral-700 rounded-lg text-xs font-semibold outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 dark:text-white"
               />
             </div>
             <button
               type="button"
               onClick={applyCustom}
               disabled={!draftStart || !draftEnd}
-              className="w-full py-2.5 bg-slate-900 dark:bg-brand text-white font-black text-[10px] uppercase tracking-[0.2em] rounded-xl hover:opacity-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              className="w-full py-2.5 bg-slate-900 dark:bg-white text-white dark:text-neutral-900 font-black text-[10px] uppercase tracking-[0.2em] rounded-xl hover:opacity-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             >
               Aplicar intervalo
             </button>

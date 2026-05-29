@@ -94,10 +94,12 @@ export default function Settings() {
   if (profile?.role !== 'admin') {
     return (
       <div className="flex flex-col items-center justify-center h-[60vh] space-y-4">
-        <ShieldCheck size={48} className="text-slate-500 dark:text-slate-300" />
+        <div className="p-4 rounded-2xl border border-slate-200/70 dark:border-neutral-800 bg-slate-50 dark:bg-neutral-900/60">
+          <ShieldCheck size={40} className="text-slate-500 dark:text-neutral-300" />
+        </div>
         <div className="text-center">
-          <h2 className="text-lg font-bold text-slate-800">Acesso Restrito</h2>
-          <p className="text-slate-500 text-sm">Esta página está disponível apenas para administradores.</p>
+          <h2 className="text-lg font-bold tracking-tight text-slate-800 dark:text-white">Acesso Restrito</h2>
+          <p className="text-slate-500 dark:text-neutral-400 text-sm">Esta página está disponível apenas para administradores.</p>
         </div>
       </div>
     );
@@ -106,11 +108,17 @@ export default function Settings() {
   return (
     <div className="max-w-4xl space-y-8">
       <header>
-        <h1 className="text-3xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-          <SettingsIcon size={32} className="text-slate-900 dark:text-white" />
+        <span className="inline-flex items-center gap-2 px-3 py-1 mb-3 rounded-full bg-slate-900/5 dark:bg-white/5 border border-slate-900/10 dark:border-white/10 text-slate-500 dark:text-neutral-300 text-[10px] font-bold uppercase tracking-widest">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          Integrações
+        </span>
+        <h1 className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white tracking-tighter flex items-center gap-3">
+          <span className="p-2 rounded-xl bg-slate-50 dark:bg-neutral-800/60 border border-slate-100 dark:border-neutral-700/60">
+            <SettingsIcon size={24} className="text-slate-900 dark:text-white" />
+          </span>
           Configurações
         </h1>
-        <p className="text-xs font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider mt-1">Gerencie chaves de API e integração Firebase</p>
+        <p className="text-slate-500 dark:text-neutral-400 text-sm mt-2">Gerencie chaves de API e integração Firebase.</p>
       </header>
 
       <div className="grid grid-cols-1 gap-8">
@@ -118,45 +126,47 @@ export default function Settings() {
         <motion.div 
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden"
+          className="bg-white dark:bg-neutral-900/60 border border-slate-200/70 dark:border-neutral-800 rounded-3xl shadow-sm overflow-hidden hover:border-slate-300 dark:hover:border-neutral-700 transition-colors"
         >
-          <div className="p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50 flex items-center gap-2">
-            <Key size={16} className="text-slate-900 dark:text-slate-200" />
-            <h3 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-tight">API de Captura de Dados</h3>
+          <div className="p-5 border-b border-slate-100 dark:border-neutral-800 flex items-center gap-3">
+            <span className="p-2 rounded-xl bg-slate-50 dark:bg-neutral-800/60 border border-slate-100 dark:border-neutral-700/60">
+              <Key size={16} className="text-slate-900 dark:text-neutral-100" />
+            </span>
+            <h3 className="text-sm font-bold text-slate-800 dark:text-white tracking-tight">API de Captura de Dados</h3>
           </div>
           <div className="p-6 space-y-6">
-            <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+            <p className="text-xs text-slate-500 dark:text-neutral-400 leading-relaxed">
               Insira abaixo a chave da API que será utilizada pelo sistema para capturar e processar os dados dos clientes vinculados aos seus afiliados.
             </p>
-            
+
             <form onSubmit={handleSaveApiKey} className="space-y-4">
               <div className="space-y-2">
-                <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest ml-1">Chave da API (Secret)</label>
+                <label className="text-[10px] font-bold text-slate-400 dark:text-neutral-500 uppercase tracking-widest ml-1">Chave da API (Secret)</label>
                 <div className="relative">
-                  <input 
+                  <input
                     type="password"
                     value={apiKey}
                     onChange={(e) => setApiKey(e.target.value)}
                     placeholder="sk-xxxxxxxxxxxxxxxxxxxxxxxx"
-                    className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-sm dark:text-white focus:ring-1 focus:ring-brand transition-all outline-none"
+                    className="w-full px-4 py-3 bg-slate-50 dark:bg-neutral-800/60 border border-slate-200 dark:border-neutral-700 rounded-xl text-sm dark:text-white focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all outline-none"
                   />
                   <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                    <ShieldCheck size={16} className="text-slate-500 dark:text-slate-400" aria-label="Armazenamento Seguro" />
+                    <ShieldCheck size={16} className="text-slate-400 dark:text-neutral-400" aria-label="Armazenamento Seguro" />
                   </div>
                 </div>
               </div>
 
               {error && (
-                <div className="p-3 bg-red-50 text-red-600 rounded text-[11px] font-bold flex items-center gap-2 border border-red-100">
+                <div className="p-3 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 rounded-xl text-[11px] font-bold flex items-center gap-2 border border-red-100 dark:border-red-900/40">
                   <AlertCircle size={14} />
                   {error}
                 </div>
               )}
 
-              <button 
+              <button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-brand text-white py-3 rounded-lg text-xs font-bold hover:bg-brand/90 dark:hover:bg-brand/80 hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
+                className="w-full bg-slate-900 dark:bg-white text-white dark:text-neutral-900 py-3 rounded-full text-xs font-bold hover:opacity-90 active:scale-[0.99] transition-all flex items-center justify-center gap-2 shadow-sm disabled:opacity-50"
               >
                 {loading ? <RefreshCw size={14} className="animate-spin" /> : saveSuccess ? <Check size={14} /> : <Save size={14} />}
                 {saveSuccess ? 'Chave Salva!' : 'Salvar Configuração'}
@@ -168,37 +178,39 @@ export default function Settings() {
         <motion.div 
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-sm overflow-hidden"
+          className="bg-white dark:bg-neutral-900/60 border border-slate-200/70 dark:border-neutral-800 rounded-3xl shadow-sm overflow-hidden hover:border-slate-300 dark:hover:border-neutral-700 transition-colors"
         >
-          <div className="p-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50 flex items-center gap-2">
-            <Database size={16} className="text-slate-900 dark:text-slate-200" />
-            <h3 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-tight">Logs de Auditoria</h3>
+          <div className="p-5 border-b border-slate-100 dark:border-neutral-800 flex items-center gap-3">
+            <span className="p-2 rounded-xl bg-slate-50 dark:bg-neutral-800/60 border border-slate-100 dark:border-neutral-700/60">
+              <Database size={16} className="text-slate-900 dark:text-neutral-100" />
+            </span>
+            <h3 className="text-sm font-bold text-slate-800 dark:text-white tracking-tight">Logs de Auditoria</h3>
           </div>
           <div className="p-6">
             {loadingLogs ? (
-              <div className="py-8 text-center text-slate-500">Carregando logs...</div>
+              <div className="py-8 text-center text-slate-500 dark:text-neutral-400 text-sm">Carregando logs...</div>
             ) : auditLogs.length === 0 ? (
-              <div className="py-8 text-center text-slate-500">Nenhum log de auditoria encontrado.</div>
+              <div className="py-8 text-center text-slate-500 dark:text-neutral-400 text-sm">Nenhum log de auditoria encontrado.</div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
-                  <thead className="text-xs text-slate-400 uppercase">
+                  <thead className="text-[10px] text-slate-400 dark:text-neutral-500 uppercase tracking-widest border-b border-slate-100 dark:border-neutral-800">
                     <tr>
-                      <th className="px-4 py-2">Data</th>
-                      <th className="px-4 py-2">Afiliado</th>
-                      <th className="px-4 py-2">Ação</th>
-                      <th className="px-4 py-2">Usuário</th>
-                      <th className="px-4 py-2">Motivo</th>
+                      <th className="px-4 py-3">Data</th>
+                      <th className="px-4 py-3">Afiliado</th>
+                      <th className="px-4 py-3">Ação</th>
+                      <th className="px-4 py-3">Usuário</th>
+                      <th className="px-4 py-3">Motivo</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                  <tbody className="divide-y divide-slate-100 dark:divide-neutral-800">
                     {auditLogs.map((log) => (
-                      <tr key={log.id} className="odd:bg-white even:bg-slate-50 dark:odd:bg-slate-900 dark:even:bg-slate-950">
-                        <td className="px-4 py-3 text-[13px] text-slate-600 dark:text-slate-300">{log.createdAt ? new Date(log.createdAt).toLocaleString('pt-BR') : '-'}</td>
-                        <td className="px-4 py-3 text-slate-700 dark:text-slate-200">{log.affiliateId}</td>
-                        <td className="px-4 py-3 text-slate-700 dark:text-slate-200">{log.action}</td>
-                        <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{log.actorName || log.actorId}</td>
-                        <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{log.reason || '-'}</td>
+                      <tr key={log.id} className="hover:bg-slate-50/70 dark:hover:bg-white/[0.03] transition-colors">
+                        <td className="px-4 py-3 text-[13px] text-slate-600 dark:text-neutral-300">{log.createdAt ? new Date(log.createdAt).toLocaleString('pt-BR') : '-'}</td>
+                        <td className="px-4 py-3 text-slate-700 dark:text-neutral-200">{log.affiliateId}</td>
+                        <td className="px-4 py-3 text-slate-700 dark:text-neutral-200">{log.action}</td>
+                        <td className="px-4 py-3 text-slate-600 dark:text-neutral-300">{log.actorName || log.actorId}</td>
+                        <td className="px-4 py-3 text-slate-600 dark:text-neutral-300">{log.reason || '-'}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -210,13 +222,13 @@ export default function Settings() {
       </div>
 
       {/* Security Info */}
-      <div className="bg-brand/5 dark:bg-brand/10 border border-brand/10 dark:border-brand/20 p-4 rounded-xl flex gap-4 items-start">
-        <div className="p-2 bg-white dark:bg-slate-900 rounded-lg shadow-sm border border-brand/10 dark:border-brand/20">
-          <ShieldCheck size={20} className="text-slate-900 dark:text-slate-200" />
+      <div className="bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-200/70 dark:border-emerald-900/40 p-5 rounded-2xl flex gap-4 items-start">
+        <div className="p-2.5 bg-emerald-500/10 rounded-xl border border-emerald-500/20 text-emerald-500 shrink-0">
+          <ShieldCheck size={20} />
         </div>
         <div>
-          <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-tight mb-1">Segurança de Dados</h4>
-          <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed font-medium">
+          <h4 className="text-xs font-bold text-slate-800 dark:text-neutral-100 uppercase tracking-widest mb-1">Segurança de Dados</h4>
+          <p className="text-[11px] text-slate-500 dark:text-neutral-400 leading-relaxed font-medium">
             Todas as chaves de API inseridas nesta área são armazenadas no Google Cloud Firestore com criptografia em repouso. 
             O acesso a estes dados é restrito via Security Rules do Firebase, permitindo leitura e escrita exclusivamente para usuários com função de administrador autenticados.
           </p>

@@ -206,34 +206,44 @@ export default function AffiliatesList() {
     <div className="space-y-8 pb-12">
       {/* Confirmation Modal */}
       {confirmModal.open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <div className="w-full max-w-md p-6 bg-white dark:bg-slate-900 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-800">
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white">Confirmar ação</h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">Tem certeza que deseja desativar o afiliado <span className="font-semibold">{confirmModal.name}</span>? Isso impedirá o acesso ao sistema.</p>
-            <div className="mt-4 flex justify-end gap-2">
-              <button className="px-4 py-2 rounded-lg bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm" onClick={() => setConfirmModal({ open: false })}>Cancelar</button>
-              <button className="px-4 py-2 rounded-lg bg-red-600 text-white text-sm" onClick={async () => {
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96, y: 8 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            className="w-full max-w-md p-6 bg-white dark:bg-neutral-900 rounded-3xl shadow-2xl border border-slate-200/70 dark:border-neutral-800"
+          >
+            <h3 className="text-lg font-bold tracking-tight text-slate-900 dark:text-white">Confirmar ação</h3>
+            <p className="text-sm text-slate-500 dark:text-neutral-400 mt-2">Tem certeza que deseja desativar o afiliado <span className="font-semibold text-slate-700 dark:text-neutral-200">{confirmModal.name}</span>? Isso impedirá o acesso ao sistema.</p>
+            <div className="mt-6 flex justify-end gap-2">
+              <button className="px-4 py-2 rounded-xl bg-white dark:bg-neutral-800 border border-slate-200 dark:border-neutral-700 text-xs font-bold text-slate-600 dark:text-neutral-200 hover:border-slate-300 dark:hover:border-neutral-600 transition-all" onClick={() => setConfirmModal({ open: false })}>Cancelar</button>
+              <button className="px-4 py-2 rounded-xl bg-red-600 text-white text-xs font-bold hover:bg-red-500 transition-all shadow-sm shadow-red-600/20" onClick={async () => {
                 if (!confirmModal.affiliateId) return;
                 await handleToggleStatus(confirmModal.affiliateId, 'inactive');
                 setConfirmModal({ open: false });
               }}>Confirmar Desativação</button>
             </div>
-          </div>
+          </motion.div>
         </div>
       )}
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-            <h1 className="text-3xl font-light text-gray-900 dark:text-white flex items-center gap-3">
-            <Users size={32} className="text-slate-900 dark:text-white" />
+          <span className="inline-flex items-center gap-2 px-3 py-1 mb-3 rounded-full bg-slate-900/5 dark:bg-white/5 border border-slate-900/10 dark:border-white/10 text-slate-500 dark:text-neutral-300 text-[10px] font-bold uppercase tracking-widest">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            {isAdmin ? 'Rede de parceiros' : 'Sua carteira'}
+          </span>
+          <h1 className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white tracking-tighter flex items-center gap-3">
+            <span className="p-2 rounded-xl bg-slate-50 dark:bg-neutral-800/60 border border-slate-100 dark:border-neutral-700/60">
+              <Users size={24} className="text-slate-900 dark:text-white" />
+            </span>
             {pageTitle}
           </h1>
-          <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">{pageSubTitle}</p>
+          <p className="text-slate-500 dark:text-neutral-400 text-sm mt-2">{pageSubTitle}</p>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={handleSync}
             disabled={syncing || loading}
-            className="flex items-center gap-2 px-4 py-2 bg-brand text-white rounded-lg text-xs font-bold hover:bg-brand/90 transition-all shadow-sm disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2.5 bg-slate-900 dark:bg-white text-white dark:text-neutral-900 rounded-full text-xs font-bold hover:opacity-90 transition-all shadow-sm disabled:opacity-50"
           >
             <DownloadCloud size={14} className={cn(syncing && "animate-spin")} />
             {syncing ? 'Sincronizando...' : 'Sincronizar afiliados'}
@@ -241,7 +251,7 @@ export default function AffiliatesList() {
           <button
             onClick={loadData}
             disabled={loading}
-            className="flex items-center gap-2 px-4 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-xs font-bold text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all shadow-sm disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 rounded-full text-xs font-bold text-slate-600 dark:text-neutral-300 hover:border-slate-300 dark:hover:border-neutral-700 transition-all shadow-sm disabled:opacity-50"
           >
             <RefreshCw size={14} className={cn(loading && "animate-spin")} />
             Atualizar Lista
@@ -249,53 +259,53 @@ export default function AffiliatesList() {
         </div>
       </header>
 
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-sm overflow-hidden transition-colors">
-        <div className="p-4 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row gap-4 items-center justify-between">
+      <div className="bg-white dark:bg-neutral-900/60 border border-slate-200/70 dark:border-neutral-800 rounded-3xl shadow-sm overflow-hidden transition-colors">
+        <div className="p-4 border-b border-slate-100 dark:border-neutral-800 flex flex-col sm:flex-row gap-4 items-center justify-between">
           <div className="relative w-full sm:max-w-xs">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 dark:text-slate-300" size={16} />
-            <input 
-              type="text" 
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-neutral-400" size={16} />
+            <input
+              type="text"
               placeholder="Buscar por nome, e-mail ou ID..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-lg text-xs outline-none focus:ring-1 focus:ring-brand transition-all dark:text-white"
+              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-neutral-800/60 border border-slate-200 dark:border-neutral-700 rounded-full text-xs outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all dark:text-white"
             />
           </div>
           <div className="flex items-center gap-2">
-            <button className="p-2 text-slate-500 dark:text-slate-300 hover:text-amber-500 transition-colors">
-              <Filter size={18} />
+            <button className="p-2.5 rounded-full border border-slate-200 dark:border-neutral-700 text-slate-500 dark:text-neutral-300 hover:text-amber-500 hover:border-amber-500/40 transition-colors">
+              <Filter size={16} />
             </button>
           </div>
         </div>
 
         {error ? (
           <div className="p-12 text-center">
-            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-red-50 dark:bg-red-900/20 text-red-500 mb-4">
+            <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl border border-red-200/70 dark:border-red-900/40 bg-red-50 dark:bg-red-950/30 text-red-500 mb-4">
               <AlertCircle size={24} />
             </div>
-            <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-2">Erro de Conexão</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs mx-auto mb-6">
+            <h3 className="text-sm font-bold text-slate-800 dark:text-neutral-100 mb-2">Erro de Conexão</h3>
+            <p className="text-xs text-slate-500 dark:text-neutral-400 max-w-xs mx-auto mb-6">
               {error}
             </p>
-            <button 
+            <button
               onClick={loadData}
-              className="px-6 py-2 bg-brand text-white rounded-lg text-xs font-bold hover:bg-brand/90 transition-all"
+              className="px-6 py-2.5 bg-slate-900 dark:bg-white text-white dark:text-neutral-900 rounded-full text-xs font-bold hover:opacity-90 transition-all"
             >
               Tentar Novamente
             </button>
           </div>
         ) : loading ? (
           <div className="p-24 flex flex-col items-center justify-center gap-4">
-            <Loader2 size={40} className="text-brand animate-spin" />
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest animate-pulse">Sincronizando com a API...</p>
+            <Loader2 size={40} className="text-amber-500 animate-spin" />
+            <p className="text-xs font-bold text-slate-400 dark:text-neutral-500 uppercase tracking-widest animate-pulse">Sincronizando com a API...</p>
           </div>
         ) : visibleAffiliates.length === 0 ? (
           <div className="p-24 text-center">
-            <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-slate-50 dark:bg-slate-800 text-slate-500 dark:text-slate-300 mb-4">
+            <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl border border-slate-100 dark:border-neutral-700/60 bg-slate-50 dark:bg-neutral-800/60 text-slate-500 dark:text-neutral-300 mb-4">
               <Users size={24} />
             </div>
-            <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-1">Nenhum cliente associado</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
+            <h3 className="text-sm font-bold text-slate-800 dark:text-neutral-100 mb-1">Nenhum cliente associado</h3>
+            <p className="text-xs text-slate-500 dark:text-neutral-400">
               A lista ficará disponível quando os clientes forem vinculados ao seu ID de afiliado.
             </p>
           </div>
@@ -303,7 +313,7 @@ export default function AffiliatesList() {
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-slate-50 dark:bg-slate-800 text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider">
+                <tr className="bg-slate-50/80 dark:bg-neutral-800/40 text-[10px] text-slate-400 dark:text-neutral-500 font-bold uppercase tracking-widest border-b border-slate-100 dark:border-neutral-800">
                   <th className="px-6 py-4">Nome / Empresa</th>
                     {isAdmin && (
                     <>
@@ -316,24 +326,24 @@ export default function AffiliatesList() {
                   )}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+              <tbody className="divide-y divide-slate-100 dark:divide-neutral-800 text-xs">
                 {visibleAffiliates.map((item: any) => {
                   const affiliateId = item.id || item._id;
                   const config = configs[affiliateId] || { affiliateId, cpaValue: 0, revPercentage: 0 };
-                  
+
                   return (
-                    <tr 
-                      key={affiliateId || Math.random()} 
-                      className="hover:bg-brand/[0.02] dark:hover:bg-white/[0.02] transition-colors group cursor-pointer"
+                    <tr
+                      key={affiliateId || Math.random()}
+                      className="hover:bg-slate-50/70 dark:hover:bg-white/[0.03] transition-colors group cursor-pointer"
                       onClick={() => handleOpenDetails(item)}
                     >
                       <td className="px-6 py-4">
                         <div className="flex flex-col">
-                          <span className="font-bold text-slate-800 dark:text-slate-200">
+                          <span className="font-bold text-slate-800 dark:text-neutral-100">
                             {item.name || item.fullName || item.nome || 'Sem Nome'}
                           </span>
                           {(item.brand || item.marca) && (
-                            <span className="text-[10px] text-slate-400 dark:text-slate-500">
+                            <span className="text-[10px] text-slate-400 dark:text-neutral-500">
                               {(item.brand?.name || item.marca?.nome || item.brand || item.marca)}
                             </span>
                           )}
@@ -346,7 +356,7 @@ export default function AffiliatesList() {
                               <select
                                 value={item.role || 'client'}
                                 onChange={async (e) => { e.stopPropagation(); const newRole = e.target.value as 'admin'|'client'; await handleRoleChange(item.userUid, newRole); }}
-                                className="w-full py-1.5 px-3 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-lg text-sm font-semibold text-slate-700 dark:text-slate-200"
+                                className="w-full py-1.5 px-3 bg-white dark:bg-neutral-800 border border-slate-200 dark:border-neutral-700 rounded-lg text-sm font-semibold text-slate-700 dark:text-neutral-200 outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all"
                               >
                                 <option value="client">Cliente</option>
                                 <option value="admin">Administrador</option>
@@ -367,7 +377,7 @@ export default function AffiliatesList() {
                                 }
                               }}
                               disabled={updatingStatusId === affiliateId}
-                              className="w-28 py-1.5 px-3 bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-lg text-sm font-semibold text-slate-700 dark:text-slate-200"
+                              className="w-28 py-1.5 px-3 bg-white dark:bg-neutral-800 border border-slate-200 dark:border-neutral-700 rounded-lg text-sm font-semibold text-slate-700 dark:text-neutral-200 outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all disabled:opacity-50"
                             >
                               <option value="active">Ativo</option>
                               <option value="inactive">Desativado</option>
@@ -375,28 +385,28 @@ export default function AffiliatesList() {
                           </td>
                           <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
                             <div className="relative group/input">
-                              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-400">R$</span>
-                              <input 
-                                type="number" 
+                              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-400 dark:text-neutral-500">R$</span>
+                              <input
+                                type="number"
                                 min="0"
                                 step="0.01"
                                 value={config.cpaValue}
                                 onChange={(e) => handleConfigChange(affiliateId, 'cpaValue', e.target.value)}
-                                className="w-24 pl-7 pr-2 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-lg text-[11px] font-bold outline-none focus:ring-1 focus:ring-amber-500 transition-all dark:text-white"
+                                className="w-24 pl-7 pr-2 py-1.5 bg-slate-50 dark:bg-neutral-800/60 border border-slate-200 dark:border-neutral-700 rounded-lg text-[11px] font-bold outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all dark:text-white"
                               />
                             </div>
                           </td>
                           <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
                             <div className="relative group/input">
-                              <Percent size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-300" />
-                              <input 
-                                type="number" 
+                              <Percent size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-300 dark:text-neutral-500" />
+                              <input
+                                type="number"
                                 min="0"
                                 max="100"
                                 step="0.1"
                                 value={config.revPercentage}
                                 onChange={(e) => handleConfigChange(affiliateId, 'revPercentage', e.target.value)}
-                                className="w-24 pl-6 pr-2 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-lg text-[11px] font-bold outline-none focus:ring-1 focus:ring-amber-500 transition-all dark:text-white"
+                                className="w-24 pl-6 pr-2 py-1.5 bg-slate-50 dark:bg-neutral-800/60 border border-slate-200 dark:border-neutral-700 rounded-lg text-[11px] font-bold outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all dark:text-white"
                               />
                             </div>
                           </td>
@@ -430,13 +440,13 @@ export default function AffiliatesList() {
           </div>
         )}
         
-        <div className="p-4 bg-slate-50 dark:bg-slate-800/30 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
-          <p className="text-[10px] text-slate-400 font-bold uppercase italic">
+        <div className="p-4 bg-slate-50/60 dark:bg-neutral-800/20 border-t border-slate-100 dark:border-neutral-800 flex items-center justify-between">
+          <p className="text-[10px] text-slate-400 dark:text-neutral-500 font-bold uppercase tracking-widest">
             Exibindo {visibleAffiliates.length} de {isAdmin ? affiliates.length : 0} registros
           </p>
           <div className="flex gap-2">
-            <button className="px-3 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded text-[10px] font-bold text-slate-400 disabled:opacity-30" disabled>Anterior</button>
-            <button className="px-3 py-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded text-[10px] font-bold text-slate-400 disabled:opacity-30" disabled>Próxima</button>
+            <button className="px-4 py-1.5 bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 rounded-full text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-neutral-400 disabled:opacity-30" disabled>Anterior</button>
+            <button className="px-4 py-1.5 bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-700 rounded-full text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-neutral-400 disabled:opacity-30" disabled>Próxima</button>
           </div>
         </div>
       </div>

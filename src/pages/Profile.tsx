@@ -106,23 +106,27 @@ export default function Profile() {
   return (
     <div className="max-w-4xl mx-auto space-y-8 pb-12">
       <header>
-        <h1 className="text-3xl font-light text-gray-900 dark:text-white">Meu Perfil</h1>
-        <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">Gerencie suas informações pessoais e segurança da conta.</p>
+        <span className="inline-flex items-center gap-2 px-3 py-1 mb-3 rounded-full bg-slate-900/5 dark:bg-white/5 border border-slate-900/10 dark:border-white/10 text-slate-500 dark:text-neutral-300 text-[10px] font-bold uppercase tracking-widest">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          Sua conta
+        </span>
+        <h1 className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white tracking-tighter">Meu Perfil</h1>
+        <p className="text-slate-500 dark:text-neutral-400 text-sm mt-2">Gerencie suas informações pessoais e segurança da conta.</p>
       </header>
       {profile?.mustChangePassword && (
-        <div className="p-4 rounded-3xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 text-amber-900 dark:text-amber-100">
+        <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200/70 dark:border-amber-900/40 text-amber-900 dark:text-amber-100">
           <p className="text-sm font-bold">Primeiro acesso: é necessário alterar a senha temporária antes de continuar.</p>
-          <p className="text-xs mt-1 text-slate-600 dark:text-slate-300">Use o campo abaixo para criar uma nova senha segura.</p>
+          <p className="text-xs mt-1 text-amber-800/80 dark:text-amber-200/70">Use o campo abaixo para criar uma nova senha segura.</p>
         </div>
       )}
 
       {message && (
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           className={cn(
             "p-4 rounded-2xl flex items-center gap-3 text-sm font-medium shadow-sm border",
-            message.type === 'success' ? "bg-green-50 text-green-700 border-green-100" : "bg-red-50 text-red-700 border-red-100"
+            message.type === 'success' ? "bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 border-emerald-200/70 dark:border-emerald-900/40" : "bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-400 border-red-200/70 dark:border-red-900/40"
           )}
         >
           {message.type === 'success' ? <CheckCircle size={18} /> : <AlertCircle size={18} />}
@@ -133,97 +137,97 @@ export default function Profile() {
       <form onSubmit={handleUpdateProfile} className="space-y-6">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Avatar Section */}
-          <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col items-center h-fit">
-            <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 mb-6 w-full text-center">Foto de Perfil</h3>
+          <div className="bg-white dark:bg-neutral-900/60 p-6 rounded-3xl border border-slate-200/70 dark:border-neutral-800 shadow-sm flex flex-col items-center h-fit hover:border-slate-300 dark:hover:border-neutral-700 transition-colors">
+            <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-neutral-500 mb-6 w-full text-center">Foto de Perfil</h3>
             <div className="relative group mb-6">
-              <img 
-                src={avatarUrl} 
-                alt="Avatar" 
-                className="w-28 h-28 rounded-full object-cover bg-slate-50 dark:bg-slate-800 border-4 border-white dark:border-slate-800 shadow-lg"
+              <img
+                src={avatarUrl}
+                alt="Avatar"
+                className="w-28 h-28 rounded-full object-cover bg-slate-50 dark:bg-neutral-800 border-4 border-white dark:border-neutral-800 shadow-lg"
               />
               {uploading && (
-                <div className="absolute inset-0 bg-white/60 dark:bg-slate-900/60 rounded-full flex items-center justify-center backdrop-blur-[1px]">
-                  <Loader2 className="text-brand animate-spin" size={24} />
+                <div className="absolute inset-0 bg-white/60 dark:bg-neutral-900/60 rounded-full flex items-center justify-center backdrop-blur-[1px]">
+                  <Loader2 className="text-amber-500 animate-spin" size={24} />
                 </div>
               )}
             </div>
-            
+
             <div className="w-full">
-              <label className="w-full flex flex-col items-center justify-center gap-2 px-4 py-3 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 border-dashed rounded-xl cursor-pointer hover:bg-brand/5 dark:hover:bg-brand/10 hover:border-brand/50 transition-all text-slate-500 dark:text-slate-400 hover:text-brand bg-image-upload shadow-sm hover:shadow-md">
+              <label className="w-full flex flex-col items-center justify-center gap-2 px-4 py-3 bg-slate-50 dark:bg-neutral-800/50 border border-slate-200 dark:border-neutral-700 border-dashed rounded-2xl cursor-pointer hover:bg-amber-50 dark:hover:bg-amber-500/10 hover:border-amber-500/50 transition-all text-slate-500 dark:text-neutral-400 hover:text-amber-600 dark:hover:text-amber-400 shadow-sm hover:shadow-md">
                 <Upload size={18} />
                 <span className="text-[10px] font-bold uppercase tracking-tight">Alterar Foto</span>
-                <input 
-                  type="file" 
-                  className="hidden" 
+                <input
+                  type="file"
+                  className="hidden"
                   accept="image/*"
                   onChange={handleFileUpload}
                   disabled={uploading}
                 />
               </label>
-              <p className="text-[9px] text-center text-slate-400 dark:text-slate-500 mt-3 font-medium px-2">Suporte para JPG, PNG ou SVG. Recomendado 400x400px.</p>
+              <p className="text-[9px] text-center text-slate-400 dark:text-neutral-500 mt-3 font-medium px-2">Suporte para JPG, PNG ou SVG. Recomendado 400x400px.</p>
             </div>
           </div>
 
           {/* Form Section */}
           <div className="lg:col-span-2 space-y-6">
-            <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
-              <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">Dados Pessoais</h3>
-              
+            <div className="bg-white dark:bg-neutral-900/60 p-6 rounded-3xl border border-slate-200/70 dark:border-neutral-800 shadow-sm space-y-6 hover:border-slate-300 dark:hover:border-neutral-700 transition-colors">
+              <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-neutral-500">Dados Pessoais</h3>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Nome Completo</label>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-400 dark:text-neutral-500 uppercase tracking-widest ml-1">Nome Completo</label>
                   <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600 dark:text-slate-300" size={16} />
-                    <input 
-                      type="text" 
+                    <User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-neutral-400" size={16} />
+                    <input
+                      type="text"
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       required
-                      className="w-full pl-10 pr-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-xs dark:text-white focus:ring-1 focus:ring-brand transition-all outline-none"
+                      className="w-full pl-10 pr-3 py-2.5 bg-slate-50 dark:bg-neutral-800/60 border border-slate-200 dark:border-neutral-700 rounded-xl text-xs dark:text-white focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all outline-none"
                     />
                   </div>
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">E-mail</label>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-bold text-slate-400 dark:text-neutral-500 uppercase tracking-widest ml-1">E-mail</label>
                   <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600 dark:text-slate-300" size={16} />
-                    <input 
-                      type="email" 
+                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-neutral-400" size={16} />
+                    <input
+                      type="email"
                       value={profile?.email}
                       disabled
-                      className="w-full pl-10 pr-3 py-2 bg-slate-100 dark:bg-slate-800/50 border border-transparent rounded text-xs text-slate-400 dark:text-slate-500 cursor-not-allowed"
+                      className="w-full pl-10 pr-3 py-2.5 bg-slate-100 dark:bg-neutral-800/40 border border-transparent dark:border-neutral-800 rounded-xl text-xs text-slate-400 dark:text-neutral-500 cursor-not-allowed"
                     />
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
-              <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500">Segurança</h3>
-              
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase">Nova Senha</label>
+            <div className="bg-white dark:bg-neutral-900/60 p-6 rounded-3xl border border-slate-200/70 dark:border-neutral-800 shadow-sm space-y-6 hover:border-slate-300 dark:hover:border-neutral-700 transition-colors">
+              <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-neutral-500">Segurança</h3>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-bold text-slate-400 dark:text-neutral-500 uppercase tracking-widest ml-1">Nova Senha</label>
                 <div className="relative max-w-xs">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-slate-500" size={16} />
-                  <input 
-                    type="password" 
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 dark:text-neutral-400" size={16} />
+                  <input
+                    type="password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
                     placeholder="••••••••"
                     minLength={6}
-                    className="w-full pl-10 pr-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-xs dark:text-white focus:ring-1 focus:ring-brand transition-all outline-none"
+                    className="w-full pl-10 pr-3 py-2.5 bg-slate-50 dark:bg-neutral-800/60 border border-slate-200 dark:border-neutral-700 rounded-xl text-xs dark:text-white focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all outline-none"
                   />
                 </div>
-                <p className="text-[9px] text-slate-400 dark:text-slate-500 mt-1 italic">Mínimo 6 caracteres para alteração.</p>
+                <p className="text-[9px] text-slate-400 dark:text-neutral-500 mt-1 italic">Mínimo 6 caracteres para alteração.</p>
               </div>
             </div>
 
             <div className="flex justify-end pt-2">
-              <button 
+              <button
                 type="submit"
                 disabled={loading}
-                className="bg-brand text-white px-6 py-2.5 rounded-md text-xs font-bold hover:bg-brand/90 dark:hover:bg-brand/80 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 flex items-center gap-2 shadow-sm"
+                className="bg-slate-900 dark:bg-white text-white dark:text-neutral-900 px-6 py-2.5 rounded-full text-xs font-bold hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50 flex items-center gap-2 shadow-sm"
               >
                 {loading ? 'Salvando...' : <><Save size={16} /> Salvar Alterações</>}
               </button>
