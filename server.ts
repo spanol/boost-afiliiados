@@ -5,6 +5,7 @@ import admin from 'firebase-admin';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { renderErrorPage } from './errorPage';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -509,6 +510,25 @@ async function startServer() {
         message: error instanceof Error ? error.message : String(error) 
       });
     }
+  });
+
+  // Block requests to dotfiles / sensitive paths (e.g. /.git, /.env) with a branded
+  // page. In dev the Vite fs middleware would otherwise return a raw 403 that leaks
+  // the absolute disk path; in prod these are just paths we never want to serve.
+  // Placed after /api/* (so the API keeps working) and before the SPA/static layer.
+  // Só dotfiles na RAIZ (/.git, /.env, /.ssh…). Não casa caminhos internos do Vite
+  // como /node_modules/.vite/deps/* — bloqueá-los quebraria o dev server.
+  app.use((req, res, next) => {
+    if (/^\/\.[^/]/.test(req.path)) {
+      return res.status(404).type('html').send(
+        renderErrorPage({
+          status: 404,
+          title: 'Página não encontrada',
+          message: 'O endereço que você tentou acessar não existe ou não está disponível.',
+        })
+      );
+    }
+    next();
   });
 
   // Vite middleware for development

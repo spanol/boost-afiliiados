@@ -14,6 +14,7 @@ import Settings from './pages/Settings';
 import Contacts from './pages/Contacts';
 import AffiliatesList from './pages/AffiliatesList';
 import AffiliateDetails from './pages/AffiliateDetails';
+import NotFound from './pages/NotFound';
 import DashboardLayout from './components/DashboardLayout';
 
 const ProtectedRoute = ({ children, role }: { children: React.ReactNode, role?: 'admin' | 'client' }) => {
@@ -85,6 +86,9 @@ export default function App() {
             <Route path="/affiliates" element={<AffiliatesList />} />
             <Route path="/affiliates/:id" element={<AffiliateDetails />} />
           </Route>
+
+          {/* Catch-all: rotas desconhecidas do SPA caem numa 404 branded. */}
+          <Route path="*" element={<NotFound />} />
           </Routes>
         </ToastProvider>
         </AuthProvider>
