@@ -194,7 +194,7 @@ export default function Home() {
             <div className="rounded-2xl md:rounded-[2rem] border border-neutral-800/60 bg-neutral-900/50 p-2 md:p-3 backdrop-blur-xl shadow-2xl relative overflow-hidden glow-white">
               <div className="rounded-xl overflow-hidden border border-neutral-700/50 bg-neutral-950">
                 <img
-                  src={asset('boost-home/dashboard-escuro.jpeg')}
+                  src={asset('boost-home/dashboard-escuro.png')}
                   alt="Plataforma Boost"
                   className="w-full h-auto block"
                 />
@@ -213,7 +213,7 @@ export default function Home() {
               que querem escalar com controle, margem e velocidade.
             </p>
           </div>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
             <StatCard icon={<Users className="w-6 h-6 text-neutral-400" />} value="+12.000" label="Afiliados" />
             <StatCard
               icon={<MonitorPlay className="w-6 h-6 text-neutral-400" />}
