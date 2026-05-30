@@ -250,7 +250,7 @@ export default function AffiliateDetails() {
                   </button>
                   <span
                     role="tooltip"
-                    className="pointer-events-none absolute left-1/2 top-full z-30 mt-2 w-64 -translate-x-1/2 rounded-xl border border-slate-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-3 text-[11px] font-medium normal-case leading-relaxed text-slate-600 dark:text-neutral-300 shadow-xl opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
+                    className="pointer-events-none absolute top-full z-30 mt-2 w-64 max-w-[calc(100vw-2rem)] right-0 translate-x-0 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 rounded-xl border border-slate-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-3 text-[11px] font-medium normal-case leading-relaxed text-slate-600 dark:text-neutral-300 shadow-xl opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
                   >
                     <strong className="text-green-600 dark:text-green-400">Cadastrado</strong>: o afiliado já criou o próprio acesso à plataforma.{' '}
                     <strong className="text-yellow-600 dark:text-yellow-400">Pendente</strong>: ainda não se registrou — gere um convite ou cadastre o usuário.
