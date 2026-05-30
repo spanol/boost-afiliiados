@@ -192,30 +192,61 @@ export default function Settings() {
             ) : auditLogs.length === 0 ? (
               <div className="py-8 text-center text-slate-500 dark:text-neutral-400 text-sm">Nenhum log de auditoria encontrado.</div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead className="text-[10px] text-slate-400 dark:text-neutral-500 uppercase tracking-widest border-b border-slate-100 dark:border-neutral-800">
-                    <tr>
-                      <th className="px-4 py-3">Data</th>
-                      <th className="px-4 py-3">Afiliado</th>
-                      <th className="px-4 py-3">Ação</th>
-                      <th className="px-4 py-3">Usuário</th>
-                      <th className="px-4 py-3">Motivo</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-neutral-800">
-                    {auditLogs.map((log) => (
-                      <tr key={log.id} className="hover:bg-slate-50/70 dark:hover:bg-white/[0.03] transition-colors">
-                        <td className="px-4 py-3 text-[13px] text-slate-600 dark:text-neutral-300">{log.createdAt ? new Date(log.createdAt).toLocaleString('pt-BR') : '-'}</td>
-                        <td className="px-4 py-3 text-slate-700 dark:text-neutral-200">{log.affiliateId}</td>
-                        <td className="px-4 py-3 text-slate-700 dark:text-neutral-200">{log.action}</td>
-                        <td className="px-4 py-3 text-slate-600 dark:text-neutral-300">{log.actorName || log.actorId}</td>
-                        <td className="px-4 py-3 text-slate-600 dark:text-neutral-300">{log.reason || '-'}</td>
+              <>
+                {/* sm+ : tabela */}
+                <div className="hidden sm:block overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead className="text-[10px] text-slate-400 dark:text-neutral-500 uppercase tracking-widest border-b border-slate-100 dark:border-neutral-800">
+                      <tr>
+                        <th className="px-4 py-3">Data</th>
+                        <th className="px-4 py-3">Afiliado</th>
+                        <th className="px-4 py-3">Ação</th>
+                        <th className="px-4 py-3">Usuário</th>
+                        <th className="px-4 py-3">Motivo</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 dark:divide-neutral-800">
+                      {auditLogs.map((log) => (
+                        <tr key={log.id} className="hover:bg-slate-50/70 dark:hover:bg-white/[0.03] transition-colors">
+                          <td className="px-4 py-3 text-[13px] text-slate-600 dark:text-neutral-300">{log.createdAt ? new Date(log.createdAt).toLocaleString('pt-BR') : '-'}</td>
+                          <td className="px-4 py-3 text-slate-700 dark:text-neutral-200">{log.affiliateId}</td>
+                          <td className="px-4 py-3 text-slate-700 dark:text-neutral-200">{log.action}</td>
+                          <td className="px-4 py-3 text-slate-600 dark:text-neutral-300">{log.actorName || log.actorId}</td>
+                          <td className="px-4 py-3 text-slate-600 dark:text-neutral-300">{log.reason || '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* mobile : cards */}
+                <div className="sm:hidden space-y-3">
+                  {auditLogs.map((log) => (
+                    <div key={log.id} className="p-4 rounded-2xl border border-slate-100 dark:border-neutral-800 bg-slate-50/50 dark:bg-neutral-800/30 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-medium text-slate-500 dark:text-neutral-400">{log.createdAt ? new Date(log.createdAt).toLocaleString('pt-BR') : '-'}</span>
+                        <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-slate-200/70 dark:bg-neutral-700/60 text-slate-600 dark:text-neutral-200">{log.action}</span>
+                      </div>
+                      <dl className="text-xs space-y-1">
+                        <div className="flex gap-2">
+                          <dt className="text-slate-400 dark:text-neutral-500 font-bold uppercase tracking-widest text-[10px] shrink-0 pt-0.5">Afiliado</dt>
+                          <dd className="text-slate-700 dark:text-neutral-200 font-medium break-all">{log.affiliateId}</dd>
+                        </div>
+                        <div className="flex gap-2">
+                          <dt className="text-slate-400 dark:text-neutral-500 font-bold uppercase tracking-widest text-[10px] shrink-0 pt-0.5">Usuário</dt>
+                          <dd className="text-slate-700 dark:text-neutral-200 font-medium break-words">{log.actorName || log.actorId || '-'}</dd>
+                        </div>
+                        {log.reason && (
+                          <div className="flex gap-2">
+                            <dt className="text-slate-400 dark:text-neutral-500 font-bold uppercase tracking-widest text-[10px] shrink-0 pt-0.5">Motivo</dt>
+                            <dd className="text-slate-700 dark:text-neutral-200 font-medium break-words">{log.reason}</dd>
+                          </div>
+                        )}
+                      </dl>
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
           </div>
         </motion.div>

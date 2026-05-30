@@ -310,7 +310,8 @@ export default function AffiliatesList() {
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <>
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50/80 dark:bg-neutral-800/40 text-[10px] text-slate-400 dark:text-neutral-500 font-bold uppercase tracking-widest border-b border-slate-100 dark:border-neutral-800">
@@ -438,6 +439,102 @@ export default function AffiliatesList() {
               </tbody>
             </table>
           </div>
+
+          {/* mobile : cards (todos os controles do admin) */}
+          <div className="md:hidden divide-y divide-slate-100 dark:divide-neutral-800">
+            {visibleAffiliates.map((item: any) => {
+              const affiliateId = item.id || item._id;
+              const config = configs[affiliateId] || { affiliateId, cpaValue: 0, revPercentage: 0 };
+              return (
+                <div key={affiliateId || Math.random()} className="p-4 space-y-4">
+                  <div className="cursor-pointer" onClick={() => handleOpenDetails(item)}>
+                    <span className="block font-bold text-sm text-slate-800 dark:text-neutral-100">
+                      {item.name || item.fullName || item.nome || 'Sem Nome'}
+                    </span>
+                    {(item.brand || item.marca) && (
+                      <span className="text-[10px] text-slate-400 dark:text-neutral-500">
+                        {item.brand?.name || item.marca?.nome || item.brand || item.marca}
+                      </span>
+                    )}
+                  </div>
+                  {isAdmin && (
+                    <>
+                      <div className="grid grid-cols-2 gap-3">
+                        <label className="block">
+                          <span className="text-[10px] font-bold text-slate-400 dark:text-neutral-500 uppercase tracking-widest mb-1 block">Cargo</span>
+                          <select
+                            value={item.role || 'client'}
+                            onChange={async (e) => { const nr = e.target.value as 'admin' | 'client'; await handleRoleChange(item.userUid, nr); }}
+                            className="w-full py-2 px-3 bg-white dark:bg-neutral-800 border border-slate-200 dark:border-neutral-700 rounded-lg text-sm font-semibold text-slate-700 dark:text-neutral-200 outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all"
+                          >
+                            <option value="client">Cliente</option>
+                            <option value="admin">Administrador</option>
+                          </select>
+                        </label>
+                        <label className="block">
+                          <span className="text-[10px] font-bold text-slate-400 dark:text-neutral-500 uppercase tracking-widest mb-1 block">Status</span>
+                          <select
+                            value={item.status || 'active'}
+                            onChange={(e) => {
+                              const chosen = e.target.value as 'active' | 'inactive';
+                              if (chosen === 'inactive' && (item.status || 'active') === 'active') {
+                                setConfirmModal({ open: true, affiliateId, name: item.name, pendingStatus: 'inactive' });
+                              } else {
+                                handleToggleStatus(affiliateId, chosen);
+                              }
+                            }}
+                            disabled={updatingStatusId === affiliateId}
+                            className="w-full py-2 px-3 bg-white dark:bg-neutral-800 border border-slate-200 dark:border-neutral-700 rounded-lg text-sm font-semibold text-slate-700 dark:text-neutral-200 outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all disabled:opacity-50"
+                          >
+                            <option value="active">Ativo</option>
+                            <option value="inactive">Desativado</option>
+                          </select>
+                        </label>
+                        <label className="block">
+                          <span className="text-[10px] font-bold text-slate-400 dark:text-neutral-500 uppercase tracking-widest mb-1 block">Config. CPA (R$)</span>
+                          <div className="relative">
+                            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-400 dark:text-neutral-500">R$</span>
+                            <input
+                              type="number" min="0" step="0.01"
+                              value={config.cpaValue}
+                              onChange={(e) => handleConfigChange(affiliateId, 'cpaValue', e.target.value)}
+                              className="w-full pl-7 pr-2 py-2 bg-slate-50 dark:bg-neutral-800/60 border border-slate-200 dark:border-neutral-700 rounded-lg text-xs font-bold outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all dark:text-white"
+                            />
+                          </div>
+                        </label>
+                        <label className="block">
+                          <span className="text-[10px] font-bold text-slate-400 dark:text-neutral-500 uppercase tracking-widest mb-1 block">Config. REV (%)</span>
+                          <div className="relative">
+                            <Percent size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-300 dark:text-neutral-500" />
+                            <input
+                              type="number" min="0" max="100" step="0.1"
+                              value={config.revPercentage}
+                              onChange={(e) => handleConfigChange(affiliateId, 'revPercentage', e.target.value)}
+                              className="w-full pl-6 pr-2 py-2 bg-slate-50 dark:bg-neutral-800/60 border border-slate-200 dark:border-neutral-700 rounded-lg text-xs font-bold outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all dark:text-white"
+                            />
+                          </div>
+                        </label>
+                      </div>
+                      <button
+                        onClick={(e) => handleSaveConfig(affiliateId, e)}
+                        disabled={savingId === affiliateId}
+                        className={cn(
+                          "w-full py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all",
+                          savedId === affiliateId
+                            ? "bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400"
+                            : "bg-amber-50 text-amber-600 hover:bg-amber-500 hover:text-white dark:bg-amber-900/10 dark:text-amber-400 dark:hover:bg-amber-500 dark:hover:text-white"
+                        )}
+                      >
+                        {savingId === affiliateId ? <Loader2 size={14} className="animate-spin" /> : savedId === affiliateId ? <CheckCircle size={14} /> : <Save size={14} />}
+                        {savedId === affiliateId ? 'Salvo!' : 'Salvar configuração'}
+                      </button>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          </>
         )}
         
         <div className="p-4 bg-slate-50/60 dark:bg-neutral-800/20 border-t border-slate-100 dark:border-neutral-800 flex items-center justify-between">
