@@ -322,9 +322,10 @@ export async function fetchAffiliateResultsByCampaign(id: string, opts: DateRang
 }
 
 // Campanhas agregadas de toda a rede (somente admin — o proxy bloqueia non-admin sem affiliateIds).
-export async function fetchAllResultsByCampaign(opts: DateRangeOpts = {}): Promise<CampaignRow[]> {
+// `affiliateIds` opcional (CSV) reescopa a uma marca/subconjunto de afiliados (multi-marca).
+export async function fetchAllResultsByCampaign(opts: DateRangeOpts = {}, affiliateIds?: string): Promise<CampaignRow[]> {
   try {
-    const rows = await fetchResultsGrouped('campaign', opts);
+    const rows = await fetchResultsGrouped('campaign', { ...opts, ...(affiliateIds ? { affiliateIds } : {}) });
     return aggregateByCampaign(rows);
   } catch (error) {
     console.error('Error fetching network campaign results:', error);

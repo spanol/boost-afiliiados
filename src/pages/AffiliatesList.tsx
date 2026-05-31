@@ -15,6 +15,8 @@ import {
 import { fetchAffiliates, fetchAffiliateConfigs, fetchAffiliateStatuses, saveAffiliateConfig, updateAffiliateStatus, createAuditLog, fetchRegisteredUsers, updateUserRole, syncAffiliates, AffiliateConfig } from '../services/affiliateService';
 import { useToast } from '../contexts/ToastContext';
 import { cn } from '../lib/utils';
+import BrandFilter from '../components/BrandFilter';
+import { getBrandName, uniqueBrands, ALL_BRANDS } from '../lib/brand';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
@@ -42,6 +44,7 @@ export default function AffiliatesList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [brandFilter, setBrandFilter] = useState<string>(ALL_BRANDS);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [savedId, setSavedId] = useState<string | null>(null);
   const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
@@ -172,12 +175,16 @@ export default function AffiliatesList() {
     }
   };
 
-  const filteredAffiliates = Array.isArray(affiliates) 
-    ? affiliates.filter(item => 
-        item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.id?.toString().includes(searchTerm)
-      )
+  const availableBrands = uniqueBrands(affiliates);
+  const filteredAffiliates = Array.isArray(affiliates)
+    ? affiliates.filter(item => {
+        const matchesSearch =
+          item.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          item.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          item.id?.toString().includes(searchTerm);
+        const matchesBrand = brandFilter === ALL_BRANDS || getBrandName(item) === brandFilter;
+        return matchesSearch && matchesBrand;
+      })
     : [];
   const visibleAffiliates = isAdmin ? filteredAffiliates : [];
 
@@ -283,7 +290,8 @@ export default function AffiliatesList() {
               className="w-full pl-10 pr-4 py-2.5 bg-slate-50 dark:bg-neutral-800/60 border border-slate-200 dark:border-neutral-700 rounded-full text-xs outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all dark:text-white"
             />
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3 flex-wrap">
+            <BrandFilter brands={availableBrands} value={brandFilter} onChange={setBrandFilter} />
             <button className="p-2.5 rounded-full border border-slate-200 dark:border-neutral-700 text-slate-500 dark:text-neutral-300 hover:text-amber-500 hover:border-amber-500/40 transition-colors">
               <Filter size={16} />
             </button>
@@ -351,13 +359,13 @@ export default function AffiliatesList() {
                       onClick={() => handleOpenDetails(item)}
                     >
                       <td className="px-6 py-4">
-                        <div className="flex flex-col">
+                        <div className="flex flex-col gap-1">
                           <span className="font-bold text-slate-800 dark:text-neutral-100">
                             {item.name || item.fullName || item.nome || 'Sem Nome'}
                           </span>
-                          {(item.brand || item.marca) && (
-                            <span className="text-[10px] text-slate-400 dark:text-neutral-500">
-                              {(item.brand?.name || item.marca?.nome || item.brand || item.marca)}
+                          {getBrandName(item) && (
+                            <span className="inline-flex w-fit items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 dark:bg-neutral-800 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-neutral-400">
+                              {getBrandName(item)}
                             </span>
                           )}
                         </div>
@@ -463,9 +471,9 @@ export default function AffiliatesList() {
                     <span className="block font-bold text-sm text-slate-800 dark:text-neutral-100">
                       {item.name || item.fullName || item.nome || 'Sem Nome'}
                     </span>
-                    {(item.brand || item.marca) && (
-                      <span className="text-[10px] text-slate-400 dark:text-neutral-500">
-                        {item.brand?.name || item.marca?.nome || item.brand || item.marca}
+                    {getBrandName(item) && (
+                      <span className="inline-flex mt-1 items-center gap-1 px-2 py-0.5 rounded-md bg-slate-100 dark:bg-neutral-800 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-neutral-400">
+                        {getBrandName(item)}
                       </span>
                     )}
                   </div>

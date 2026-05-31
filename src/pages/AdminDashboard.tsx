@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { 
   Users,
@@ -28,83 +28,108 @@ import { fetchAffiliates, fetchAllResults, fetchAllResultsByCampaign, fetchAffil
 import DateRangePicker from '../components/DateRangePicker';
 import CampaignBreakdown from '../components/CampaignBreakdown';
 import InfoTooltip from '../components/InfoTooltip';
+import BrandFilter from '../components/BrandFilter';
+import { getBrandName, uniqueBrands, ALL_BRANDS } from '../lib/brand';
 import { DateRange, getDefaultRange } from '../lib/dateRange';
 
 export default function AdminDashboard() {
   const { profile } = useAuth();
   const { theme } = useTheme();
-  const [affiliatesCount, setAffiliatesCount] = useState<number>(0);
   const [results, setResults] = useState<any[]>([]);
+  const [configs, setConfigs] = useState<Record<string, any>>({});
+  const [affiliates, setAffiliates] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [range, setRange] = useState<DateRange>(() => getDefaultRange());
-  const [totals, setTotals] = useState({
-    commission: 0,
-    cpa: 0,
-    rev: 0,
-    // Funil agregado da rede (mesmos dados que antes só apareciam por afiliado).
-    registrations: 0,
-    firstDeposits: 0,
-    qualifiedCpa: 0,
-    deposit: 0
-  });
-  // B1 · lucro líquido consolidado do período (comissão das casas − repasse aos afiliados).
-  const [netProfit, setNetProfit] = useState(0);
   // Por Campanha — desempenho agregado da rede por campanha (groupBy=campaign).
   const [campaignRows, setCampaignRows] = useState<CampaignRow[]>([]);
+  // Filtro multi-marca (só aparece com ≥2 marcas; hoje, só Superbet → oculto).
+  const [brandFilter, setBrandFilter] = useState<string>(ALL_BRANDS);
 
-  // Contagem de afiliados independe do período — busca uma vez.
+  // Lista de afiliados (com brand) — base do filtro e do mapa id→marca.
   useEffect(() => {
     fetchAffiliates()
-      .then((affiliates) => setAffiliatesCount(affiliates.length))
+      .then((list) => setAffiliates(Array.isArray(list) ? list : []))
       .catch((err) => console.error('Error fetching affiliates for dashboard:', err));
   }, []);
 
-  // Resultados/comissões respeitam o intervalo de datas selecionado (B2).
+  // Mapa affiliateId → nome da marca (results não trazem marca; cruzamos aqui).
+  const brandById = useMemo(() => {
+    const map: Record<string, string | null> = {};
+    for (const a of affiliates) map[String(a.id ?? a._id ?? '')] = getBrandName(a);
+    return map;
+  }, [affiliates]);
+
+  const availableBrands = useMemo(() => uniqueBrands(affiliates), [affiliates]);
+
+  // IDs da marca selecionada (CSV) para reescopar a busca de campanhas. null = todas.
+  const brandAffiliateIds = useMemo(() => {
+    if (brandFilter === ALL_BRANDS) return null;
+    return affiliates
+      .filter((a) => getBrandName(a) === brandFilter)
+      .map((a) => String(a.id ?? a._id ?? ''))
+      .filter(Boolean)
+      .join(',');
+  }, [affiliates, brandFilter]);
+
+  // Resultados/comissões respeitam o intervalo de datas (B2) e a marca (multi-marca).
+  // Campanhas refazem fetch por marca; results/configs ficam crus e são filtrados via useMemo.
   useEffect(() => {
     async function getResults() {
       try {
         setLoading(true);
-        const [allResults, configs, campaigns] = await Promise.all([
+        const [allResults, cfgs, campaigns] = await Promise.all([
           fetchAllResults(range),
           fetchAffiliateConfigs(),
-          fetchAllResultsByCampaign(range),
+          fetchAllResultsByCampaign(range, brandAffiliateIds ?? undefined),
         ]);
-        setResults(allResults);
+        setResults(Array.isArray(allResults) ? allResults : []);
+        setConfigs(cfgs || {});
         setCampaignRows(campaigns);
-
-        // Calculate totals (financeiro + funil agregado da rede)
-        const calculatedTotals = allResults.reduce((acc, curr) => ({
-          commission: acc.commission + (curr.total_commission || 0),
-          cpa: acc.cpa + (curr.cpa || 0),
-          rev: acc.rev + (curr.rvs || 0),
-          registrations: acc.registrations + (curr.registrations || 0),
-          firstDeposits: acc.firstDeposits + (curr.first_deposits || 0),
-          qualifiedCpa: acc.qualifiedCpa + (curr.qualified_cpa || 0),
-          // valor depositado (R$). Campo `deposit` do results (ver BACKLOG · Depósitos);
-          // se a casa reportar com outro nome, ajustar aqui ao validar com dados reais.
-          deposit: acc.deposit + (curr.deposit || 0)
-        }), { commission: 0, cpa: 0, rev: 0, registrations: 0, firstDeposits: 0, qualifiedCpa: 0, deposit: 0 });
-
-        setTotals(calculatedTotals);
-
-        // B1 · lucro líquido = Σ comissão das casas − Σ repasse aos afiliados (por config).
-        const totalPayout = allResults.reduce(
-          (sum, r) => sum + calcAffiliatePayout(r, configs[String(r.affiliate_id ?? r.id ?? '')]),
-          0
-        );
-        setNetProfit(calculatedTotals.commission - totalPayout);
       } catch (err) {
         console.error('Error fetching dashboard data:', err);
         setResults([]);
+        setConfigs({});
         setCampaignRows([]);
-        setTotals({ commission: 0, cpa: 0, rev: 0, registrations: 0, firstDeposits: 0, qualifiedCpa: 0, deposit: 0 });
-        setNetProfit(0);
       } finally {
         setLoading(false);
       }
     }
     getResults();
-  }, [range.startDate, range.endDate]);
+  }, [range.startDate, range.endDate, brandAffiliateIds]);
+
+  // Results da marca selecionada (filtro client-side via mapa id→marca).
+  const scopedResults = useMemo(() => {
+    if (brandFilter === ALL_BRANDS) return results;
+    return results.filter((r) => brandById[String(r.affiliate_id ?? r.id ?? '')] === brandFilter);
+  }, [results, brandFilter, brandById]);
+
+  // Totais (financeiro + funil) derivados dos results no escopo da marca.
+  const totals = useMemo(() => scopedResults.reduce((acc, curr) => ({
+    commission: acc.commission + (curr.total_commission || 0),
+    cpa: acc.cpa + (curr.cpa || 0),
+    rev: acc.rev + (curr.rvs || 0),
+    registrations: acc.registrations + (curr.registrations || 0),
+    firstDeposits: acc.firstDeposits + (curr.first_deposits || 0),
+    qualifiedCpa: acc.qualifiedCpa + (curr.qualified_cpa || 0),
+    // valor depositado (R$). Campo `deposit` do results (ver BACKLOG · Depósitos).
+    deposit: acc.deposit + (curr.deposit || 0)
+  }), { commission: 0, cpa: 0, rev: 0, registrations: 0, firstDeposits: 0, qualifiedCpa: 0, deposit: 0 }),
+  [scopedResults]);
+
+  // B1 · lucro líquido = Σ comissão das casas − Σ repasse aos afiliados (por config).
+  const netProfit = useMemo(() => {
+    const payout = scopedResults.reduce(
+      (sum, r) => sum + calcAffiliatePayout(r, configs[String(r.affiliate_id ?? r.id ?? '')]),
+      0
+    );
+    return totals.commission - payout;
+  }, [scopedResults, configs, totals.commission]);
+
+  // Contagem de afiliados respeita o filtro de marca.
+  const affiliatesCount = useMemo(
+    () => (brandFilter === ALL_BRANDS ? affiliates.length : affiliates.filter((a) => getBrandName(a) === brandFilter).length),
+    [affiliates, brandFilter]
+  );
 
   const metrics = [
     { label: 'Total de Afiliados', value: affiliatesCount.toString(), icon: Users, color: 'brand' },
@@ -121,8 +146,8 @@ export default function AdminDashboard() {
     { label: 'CPA Qualificado', value: totals.qualifiedCpa.toLocaleString('pt-BR'), icon: Target },
   ];
 
-  // Prepare data for the chart - top 10 affiliates by commission
-  const chartData = [...results]
+  // Prepare data for the chart - top affiliates by commission (no escopo da marca)
+  const chartData = [...scopedResults]
     .sort((a, b) => (b.total_commission || 0) - (a.total_commission || 0))
     .map(item => {
       const label = String(item.affiliate_name || item.name || item.affiliate_id || '---');
@@ -174,7 +199,10 @@ export default function AdminDashboard() {
           <h1 className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white tracking-tighter">Dashboard</h1>
           <p className="text-slate-500 dark:text-neutral-400 text-sm mt-2">Bem-vindo de volta, {profile?.name}. Visão geral do desempenho da rede.</p>
         </div>
-        <DateRangePicker value={range} onChange={setRange} />
+        <div className="flex flex-col items-start md:items-end gap-3">
+          <DateRangePicker value={range} onChange={setRange} />
+          <BrandFilter brands={availableBrands} value={brandFilter} onChange={setBrandFilter} />
+        </div>
       </header>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
