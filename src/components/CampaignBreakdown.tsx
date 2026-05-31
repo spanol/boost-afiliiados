@@ -1,5 +1,6 @@
 import React from 'react';
-import { Megaphone, HelpCircle } from 'lucide-react';
+import { Megaphone } from 'lucide-react';
+import InfoTooltip from './InfoTooltip';
 
 export interface CampaignDisplayRow {
   name: string;
@@ -16,6 +17,8 @@ interface CampaignBreakdownProps {
   commissionLabel: string;
   title?: string;
   subtitle?: string;
+  // Texto do tooltip do título (varia por contexto admin/afiliado).
+  infoText?: string;
 }
 
 const formatBRL = (value: number) =>
@@ -31,6 +34,7 @@ export default function CampaignBreakdown({
   commissionLabel,
   title = 'Desempenho por Campanha',
   subtitle,
+  infoText = 'Resultados agrupados por campanha no período selecionado.',
 }: CampaignBreakdownProps) {
   const data = Array.isArray(rows) ? rows : [];
 
@@ -49,7 +53,7 @@ export default function CampaignBreakdown({
           </div>
           <div>
             <h3 className="font-black text-xs text-slate-800 dark:text-white uppercase tracking-widest flex items-center gap-1">
-              {title} <HelpCircle size={12} className="text-slate-400 dark:text-neutral-500" />
+              {title} <InfoTooltip text={infoText} size={12} align="left" />
             </h3>
             {subtitle && (
               <p className="text-[10px] font-bold text-slate-400 dark:text-neutral-500 mt-0.5">{subtitle}</p>

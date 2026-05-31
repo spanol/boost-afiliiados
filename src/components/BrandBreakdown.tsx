@@ -1,6 +1,7 @@
 import React from 'react';
-import { HelpCircle, Store } from 'lucide-react';
+import { Store } from 'lucide-react';
 import type { AffiliateConfig } from '../services/affiliateService';
+import InfoTooltip from './InfoTooltip';
 
 interface BrandBreakdownProps {
   data: any[];
@@ -31,7 +32,7 @@ export default function BrandBreakdown({ data, config }: BrandBreakdownProps) {
           <Store size={16} />
         </div>
         <div className="flex items-center gap-1 text-xs font-black text-slate-900 dark:text-white uppercase tracking-widest">
-          {title} <HelpCircle size={14} className="text-slate-400 dark:text-neutral-500" />
+          {title} <InfoTooltip text="Distribuição da sua comissão por casa de aposta no período, calculada com os valores do seu contrato (CPA/REV)." align="left" />
         </div>
       </div>
       {brands.length === 0 ? (

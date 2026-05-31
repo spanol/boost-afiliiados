@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import {
   Building,
-  HelpCircle,
   Loader2,
   Shield,
   TrendingUp,
@@ -22,7 +21,9 @@ import {
 import BrandBreakdown from '../components/BrandBreakdown';
 import DailyPerformanceChart from '../components/DailyPerformanceChart';
 import DateRangePicker from '../components/DateRangePicker';
-import { DateRange, getDefaultRange } from '../lib/dateRange';
+import InfoTooltip from '../components/InfoTooltip';
+import TrendBadge from '../components/TrendBadge';
+import { DateRange, getDefaultRange, getPreviousRange, percentChange } from '../lib/dateRange';
 import { cn } from '../lib/utils';
 
 export default function ClientDashboard() {
@@ -31,6 +32,7 @@ export default function ClientDashboard() {
   const [results, setResults] = useState<any[]>([]);
   const [brandResults, setBrandResults] = useState<any[]>([]);
   const [dailyResults, setDailyResults] = useState<any[]>([]);
+  const [prevRegistrations, setPrevRegistrations] = useState<number | null>(null);
   const [config, setConfig] = useState<AffiliateConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -52,6 +54,7 @@ export default function ClientDashboard() {
       let resultsData: any[] = [];
       let brandData: any[] = [];
       let dailyData: any[] = [];
+      let prevData: any[] = [];
 
       if (affiliateId) {
         affiliateDetails = await fetchAffiliateById(affiliateId).catch(() => null);
@@ -66,7 +69,8 @@ export default function ClientDashboard() {
       }
 
       if (affiliateId) {
-        [resultsData, allConfigs, brandData, dailyData] = await Promise.all([
+        const prevRange = getPreviousRange(range);
+        [resultsData, allConfigs, brandData, dailyData, prevData] = await Promise.all([
           fetchAffiliateResults(affiliateId, range).catch((err) => {
             console.error('Error fetching results:', err);
             return [];
@@ -77,6 +81,7 @@ export default function ClientDashboard() {
           }),
           fetchAffiliateResultsByBrand(affiliateId, range),
           fetchAffiliateDailyResults(affiliateId, range.startDate, range.endDate),
+          fetchAffiliateResults(affiliateId, prevRange).catch(() => []),
         ]);
       }
 
@@ -92,6 +97,7 @@ export default function ClientDashboard() {
       setResults(Array.isArray(resultsData) ? resultsData : []);
       setBrandResults(Array.isArray(brandData) ? brandData : []);
       setDailyResults(Array.isArray(dailyData) ? dailyData : []);
+      setPrevRegistrations((Array.isArray(prevData) ? prevData : []).reduce((sum: number, r: any) => sum + (r.registrations || 0), 0));
       setConfig(affiliateId ? allConfigs[affiliateId] || null : null);
       setError(null);
     } catch (err) {
@@ -106,6 +112,7 @@ export default function ClientDashboard() {
       setResults([]);
       setBrandResults([]);
       setDailyResults([]);
+      setPrevRegistrations(null);
       setConfig(null);
       setError(null);
     } finally {
@@ -181,7 +188,7 @@ export default function ClientDashboard() {
                 <div className="bg-white dark:bg-neutral-900 p-8 rounded-3xl border border-slate-100 dark:border-neutral-800 shadow-sm space-y-6">
                   <div>
                     <div className="flex items-center gap-1 text-xs font-bold text-slate-500 mb-2">
-                      Comissão total <HelpCircle size={14} className="text-slate-500 dark:text-neutral-300" />
+                      Comissão total <InfoTooltip text="Seu ganho no período: CPA Calculado + REV Share, conforme a configuração do seu contrato." align="left" />
                     </div>
                     <div className="flex items-baseline gap-4">
                       <h2 className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white break-words">
@@ -201,7 +208,7 @@ export default function ClientDashboard() {
                         </div>
                         <div>
                           <div className="flex items-center gap-1 text-[10px] font-bold text-slate-500 dark:text-neutral-300 uppercase tracking-widest mb-1">
-                            CPA Calculado (R$ {config?.cpaValue || 0}/CPA) <HelpCircle size={10} />
+                            CPA Calculado (R$ {config?.cpaValue || 0}/CPA) <InfoTooltip text="CPA Qualificado × valor de CPA do seu contrato. Quantos cadastros qualificaram, multiplicado pelo valor por aquisição." size={10} align="left" />
                           </div>
                           <p className="text-xl font-black text-slate-800 dark:text-white">
                             R$ {calculatedCpa.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -217,7 +224,7 @@ export default function ClientDashboard() {
                         </div>
                         <div>
                           <div className="flex items-center gap-1 text-[10px] font-bold text-slate-500 dark:text-neutral-300 uppercase tracking-widest mb-1">
-                            REV Share ({config?.revPercentage || 0}%) <HelpCircle size={10} />
+                            REV Share ({config?.revPercentage || 0}%) <InfoTooltip text="Participação na receita: percentual do seu contrato aplicado sobre o RVS (receita compartilhada) do período." size={10} align="left" />
                           </div>
                           <p className="text-xl font-black text-slate-800 dark:text-white">
                             R$ {calculatedRev.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -238,9 +245,7 @@ export default function ClientDashboard() {
                       <div className="p-3 bg-slate-50 dark:bg-neutral-800 rounded-2xl text-slate-400 group-hover:text-brand transition-colors">
                         <UserPlus size={20} />
                       </div>
-                      <div className="flex items-center gap-1 text-[10px] font-black text-green-500 bg-green-500/10 px-2 py-1 rounded-lg">
-                        <TrendingUp size={10} /> +12%
-                      </div>
+                      <TrendBadge change={percentChange(res.registrations || 0, prevRegistrations ?? 0)} />
                     </div>
                     <div className="space-y-1">
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Cadastros</p>

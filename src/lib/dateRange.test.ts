@@ -5,6 +5,8 @@ import {
   getDefaultRange,
   formatRangeLabel,
   matchPreset,
+  getPreviousRange,
+  percentChange,
 } from './dateRange';
 
 // 29/05/2026 (mês index 4). Datas locais — coerente com toISODate (usa fuso local).
@@ -88,5 +90,45 @@ describe('formatRangeLabel', () => {
 
   it('mostra o intervalo quando início != fim', () => {
     expect(formatRangeLabel({ startDate: '2026-05-01', endDate: '2026-05-29' })).toBe('01/05/2026 – 29/05/2026');
+  });
+});
+
+describe('getPreviousRange', () => {
+  it('mês cheio (30 dias) → mês anterior de mesma duração', () => {
+    // 01–30/04 (30 dias) → os 30 dias imediatamente anteriores: 02–31/03.
+    expect(getPreviousRange({ startDate: '2026-04-01', endDate: '2026-04-30' }))
+      .toEqual({ startDate: '2026-03-02', endDate: '2026-03-31' });
+  });
+
+  it('um único dia → dia anterior', () => {
+    expect(getPreviousRange({ startDate: '2026-05-10', endDate: '2026-05-10' }))
+      .toEqual({ startDate: '2026-05-09', endDate: '2026-05-09' });
+  });
+
+  it('7 dias → 7 dias imediatamente anteriores', () => {
+    // 08–14 (7 dias) → 01–07.
+    expect(getPreviousRange({ startDate: '2026-05-08', endDate: '2026-05-14' }))
+      .toEqual({ startDate: '2026-05-01', endDate: '2026-05-07' });
+  });
+
+  it('vira o mês corretamente', () => {
+    // 01–03/05 (3 dias) → 28–30/04.
+    expect(getPreviousRange({ startDate: '2026-05-01', endDate: '2026-05-03' }))
+      .toEqual({ startDate: '2026-04-28', endDate: '2026-04-30' });
+  });
+});
+
+describe('percentChange', () => {
+  it('retorna null sem base de comparação (anterior 0)', () => {
+    expect(percentChange(10, 0)).toBeNull();
+  });
+
+  it('calcula alta e queda', () => {
+    expect(percentChange(110, 100)).toBe(10);
+    expect(percentChange(80, 100)).toBe(-20);
+  });
+
+  it('retorna 0 quando não houve variação', () => {
+    expect(percentChange(50, 50)).toBe(0);
   });
 });

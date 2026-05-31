@@ -78,6 +78,32 @@ export function getDefaultRange(now: Date = new Date()): DateRange {
   return getPresetRange('thisMonth', now);
 }
 
+// Calcula o intervalo imediatamente anterior, de MESMA duração, para comparação
+// período-a-período (ex.: crescimento de cadastros vs. período anterior).
+// Ex.: 01–30/05 (30 dias) → 01–30/04. Datas em 'YYYY-MM-DD', fuso local.
+export function getPreviousRange(range: DateRange): DateRange {
+  const parse = (iso: string) => {
+    const [y, m, d] = iso.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  };
+  const start = parse(range.startDate);
+  const end = parse(range.endDate);
+  // Duração inclusiva em dias.
+  const days = Math.round((end.getTime() - start.getTime()) / 86_400_000) + 1;
+  const prevEnd = new Date(start);
+  prevEnd.setDate(prevEnd.getDate() - 1);
+  const prevStart = new Date(prevEnd);
+  prevStart.setDate(prevStart.getDate() - (days - 1));
+  return { startDate: toISODate(prevStart), endDate: toISODate(prevEnd) };
+}
+
+// Variação percentual entre dois valores. Retorna null quando não há base de
+// comparação (anterior = 0) — evita exibir "+∞%" ou crescimento enganoso.
+export function percentChange(current: number, previous: number): number | null {
+  if (!previous) return null;
+  return ((current - previous) / previous) * 100;
+}
+
 // Rótulo curto e legível (pt-BR) para o intervalo selecionado.
 export function formatRangeLabel(range: DateRange): string {
   const fmt = (iso: string) => {

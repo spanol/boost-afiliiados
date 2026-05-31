@@ -6,7 +6,6 @@ import {
   BarChart3,
   TrendingUp,
   Loader2,
-  HelpCircle,
   UserPlus,
   Wallet,
   Target,
@@ -28,6 +27,7 @@ import { cn } from '../lib/utils';
 import { fetchAffiliates, fetchAllResults, fetchAllResultsByCampaign, fetchAffiliateConfigs, calcAffiliatePayout, CampaignRow } from '../services/affiliateService';
 import DateRangePicker from '../components/DateRangePicker';
 import CampaignBreakdown from '../components/CampaignBreakdown';
+import InfoTooltip from '../components/InfoTooltip';
 import { DateRange, getDefaultRange } from '../lib/dateRange';
 
 export default function AdminDashboard() {
@@ -307,7 +307,7 @@ export default function AdminDashboard() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
           <div>
             <h3 className="text-base font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
-              Desempenho por Afiliado <HelpCircle size={14} className="text-slate-400 dark:text-neutral-500" />
+              Desempenho por Afiliado <InfoTooltip text="Top afiliados por volume de comissão no período. Use os controles abaixo para navegar entre as páginas." align="left" />
             </h3>
             <p className="text-xs text-slate-500 dark:text-neutral-400 font-medium mt-1">Top parceiros por volume de comissão — mostra 5 por vez, use o controle para ver os próximos.</p>
           </div>
@@ -431,6 +431,7 @@ export default function AdminDashboard() {
           <CampaignBreakdown
             commissionLabel="Comissão (casa)"
             subtitle="Soma de todos os afiliados do master no período"
+            infoText="Desempenho agregado da rede por campanha. 'Comissão (casa)' é o total reportado pelas casas (antes do repasse aos afiliados)."
             rows={campaignRows.map((c) => ({
               name: c.name,
               registrations: c.registrations,

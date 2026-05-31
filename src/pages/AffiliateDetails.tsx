@@ -43,7 +43,9 @@ import BrandBreakdown from '../components/BrandBreakdown';
 import CampaignBreakdown from '../components/CampaignBreakdown';
 import DailyPerformanceChart from '../components/DailyPerformanceChart';
 import DateRangePicker from '../components/DateRangePicker';
-import { DateRange, getDefaultRange } from '../lib/dateRange';
+import InfoTooltip from '../components/InfoTooltip';
+import TrendBadge from '../components/TrendBadge';
+import { DateRange, getDefaultRange, getPreviousRange, percentChange } from '../lib/dateRange';
 import { cn } from '../lib/utils';
 import { motion } from 'motion/react';
 
@@ -59,6 +61,8 @@ export default function AffiliateDetails() {
   const [brandResults, setBrandResults] = useState<any[]>([]);
   const [campaignResults, setCampaignResults] = useState<CampaignRow[]>([]);
   const [dailyResults, setDailyResults] = useState<any[]>([]);
+  // Cadastros do período anterior (mesma duração) → crescimento real no card.
+  const [prevRegistrations, setPrevRegistrations] = useState<number | null>(null);
   const [config, setConfig] = useState<AffiliateConfig | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -89,7 +93,8 @@ export default function AffiliateDetails() {
   const loadDetails = async (affId: string) => {
     try {
       setLoading(true);
-      const [detailsData, resultsData, allConfigs, brandData, campaignData, dailyData] = await Promise.all([
+      const prevRange = getPreviousRange(range);
+      const [detailsData, resultsData, allConfigs, brandData, campaignData, dailyData, prevResults] = await Promise.all([
         fetchAffiliateById(affId),
         fetchAffiliateResults(affId, range).catch(err => {
           console.error('Error fetching results:', err);
@@ -98,13 +103,17 @@ export default function AffiliateDetails() {
         fetchAffiliateConfigs(),
         fetchAffiliateResultsByBrand(affId, range),
         fetchAffiliateResultsByCampaign(affId, range),
-        fetchAffiliateDailyResults(affId, range.startDate, range.endDate)
+        fetchAffiliateDailyResults(affId, range.startDate, range.endDate),
+        fetchAffiliateResults(affId, prevRange).catch(() => [])
       ]);
       setAffiliate(detailsData);
       setResults(Array.isArray(resultsData) ? resultsData : []);
       setBrandResults(Array.isArray(brandData) ? brandData : []);
       setCampaignResults(Array.isArray(campaignData) ? campaignData : []);
       setDailyResults(Array.isArray(dailyData) ? dailyData : []);
+      // Soma de cadastros do período anterior (a API pode devolver 1+ linhas).
+      const prevArr = Array.isArray(prevResults) ? prevResults : [];
+      setPrevRegistrations(prevArr.reduce((sum: number, r: any) => sum + (r.registrations || 0), 0));
       setConfig(allConfigs[affId] || null);
 
       // Cadastro próprio: para admin, consultamos se existe conta vinculada ao
@@ -300,7 +309,7 @@ export default function AffiliateDetails() {
                   <div className="bg-white dark:bg-neutral-900 p-8 rounded-3xl border border-slate-100 dark:border-neutral-800 shadow-sm space-y-6">
                     <div>
                       <div className="flex items-center gap-1 text-xs font-bold text-slate-500 mb-2">
-                        Comissão total <HelpCircle size={14} className="text-slate-500 dark:text-neutral-300" />
+                        Comissão total <InfoTooltip text="Seu ganho no período: CPA Calculado + REV Share, conforme a configuração do seu contrato." align="left" />
                       </div>
                       <div className="flex items-baseline gap-4">
                         <h2 className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white break-words">
@@ -320,7 +329,7 @@ export default function AffiliateDetails() {
                           </div>
                           <div>
                             <div className="flex items-center gap-1 text-[10px] font-bold text-slate-500 dark:text-neutral-300 uppercase tracking-widest mb-1">
-                              CPA Calculado (R$ {config?.cpaValue || 0}/CPA) <HelpCircle size={10} />
+                              CPA Calculado (R$ {config?.cpaValue || 0}/CPA) <InfoTooltip text="CPA Qualificado × valor de CPA do seu contrato. Quantos cadastros qualificaram, multiplicado pelo valor por aquisição." size={10} align="left" />
                             </div>
                             <p className="text-xl font-black text-slate-800 dark:text-white">
                               R$ {calculatedCpa.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -336,7 +345,7 @@ export default function AffiliateDetails() {
                           </div>
                           <div>
                             <div className="flex items-center gap-1 text-[10px] font-bold text-slate-500 dark:text-neutral-300 uppercase tracking-widest mb-1">
-                              REV Share ({config?.revPercentage || 0}%) <HelpCircle size={10} />
+                              REV Share ({config?.revPercentage || 0}%) <InfoTooltip text="Participação na receita: percentual do seu contrato aplicado sobre o RVS (receita compartilhada) do período." size={10} align="left" />
                             </div>
                             <p className="text-xl font-black text-slate-800 dark:text-white">
                               R$ {calculatedRev.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -363,9 +372,7 @@ export default function AffiliateDetails() {
                         <div className="p-3 bg-slate-50 dark:bg-neutral-800 rounded-2xl text-slate-400 group-hover:text-brand transition-colors">
                           <UserPlus size={20} />
                         </div>
-                        <div className="flex items-center gap-1 text-[10px] font-black text-green-500 bg-green-500/10 px-2 py-1 rounded-lg">
-                          <TrendingUp size={10} /> +12%
-                        </div>
+                        <TrendBadge change={percentChange(res.registrations || 0, prevRegistrations ?? 0)} />
                       </div>
                       <div className="space-y-1">
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Cadastros</p>
@@ -436,6 +443,7 @@ export default function AffiliateDetails() {
                   <CampaignBreakdown
                     commissionLabel="Sua comissão"
                     subtitle="Resultados por campanha no período selecionado"
+                    infoText="Seu desempenho por campanha. 'Sua comissão' é o repasse a você (CPA + REV) referente a cada campanha no período."
                     rows={campaignResults.map((c) => ({
                       name: c.name,
                       registrations: c.registrations,
