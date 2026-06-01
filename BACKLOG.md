@@ -20,12 +20,12 @@ reporta). Os afiliados recebem o que está configurado em `affiliate_configs`
 - Coluna/linha por afiliado em `AffiliatesList` / `AffiliateDetails` (recebido vs. repassado vs. margem).
 - Cálculo no `affiliateService` (já temos as duas pontas: `total_commission` da OTG e a comissão calculada por config).
 
-**Perguntas em aberto** → consolidadas no **"Roteiro p/ o Carlos"** do B3 (mesmo tema de dinheiro), itens 1, 2 e 7:
-- "Comissão recebida da casa" = exatamente o `total_commission` da OTG, ou há acordo diferente por casa?
-- Existem custos fixos da agência a descontar (operacional, taxas)?
-- Mostrar lucro líquido também por casa e por período?
+**Respondido pelo Carlos (2026-05-29):**
+- Base = exatamente o `total_commission` da OTG (sem acordo por casa). ✅
+- Custos fixos a descontar? **Ainda não.** ✅
+- Mostrar lucro líquido **por casa e por período**: **sim** → novo item a construir (hoje só temos o consolidado por período via filtro de data).
 
-Implementado como **provisório** (`calcNetProfit`: `total_commission` direto, sem custos fixos) — destrava ao Carlos responder.
+Ou seja, o `calcNetProfit` atual (`total_commission` direto, sem custos fixos) **deixa de ser provisório** — está correto. Falta só o detalhamento por casa.
 
 ---
 
@@ -55,12 +55,13 @@ A dashboard da OTG tem seletor de datas; o Boost precisa do mesmo.
 seus afiliados como **sub-afiliados** do especial. O especial ganha uma view parecida com a
 do master, porém **escopada à própria sub-rede** e com menos features.
 
-**Decisões (travadas).**
+**Decisões (confirmadas com o Carlos em 2026-05-29, salvo Q6).**
 - **Papel:** especial = `client` com flag `isSpecial` (NÃO vira admin). Login normal, view diferente.
 - **Hierarquia:** modelo **local da Boost** (a OTG não expõe pai/filho). **1 nível** (sub não tem sub-rede própria); 1 especial por afiliado.
-- **Poderes do especial:** visualizar a sub-rede + **convidar/gerir** os próprios subs. **Não** mexe em comissão (isso é só do MASTER).
-- **Especial vê o próprio ganho** (o spread dele). A **margem da agência** sobre a sub-rede continua **só no MASTER** (regra do lucro líquido — ver [memória/BACKLOG B1]).
-- **Comissão = SPREAD ⚠️ (provisório):** o MASTER define (a) a taxa de cada sub (o que o sub recebe, pago pela agência) e (b) a taxa do especial sobre a produção da sub-rede; o **especial fica com a diferença**. A produção própria do especial é paga pelo `affiliate_config` normal dele.
+- **Poderes do especial:** visualizar a sub-rede + **convidar/gerir** os próprios subs + **definir a comissão dos próprios subs** (limitada à taxa que o MASTER setou para o especial = teto). *(Atualizado: antes era "não mexe em comissão".)*
+- **Especial vê o próprio ganho:** spread sobre os subs **+** a própria produção, com **cards separados por afiliado** (dados individuais de cada sub + os dele). A **margem da agência** sobre tudo continua **só no MASTER** (regra do lucro líquido).
+- **Comissão = SPREAD (confirmado):** o **MASTER** define a **taxa do especial** sobre os afiliados vinculados (o teto). O **ESPECIAL** define a **taxa de cada sub** (≤ teto). O especial fica com o **spread** = `(taxa do especial − taxa do sub) × produção do sub`, somado por sub, **+** a comissão da produção própria dele (`affiliate_config` normal). Base da casa = `total_commission` exato, **sem custos fixos** (confirmado).
+- **⏳ Em aberto (Q6):** quem **desembolsa** o repasse aos subs — agência direto ou sai do bolo do especial. Não bloqueia a exibição/cálculo no Boost (é operacional); reperguntar ao Carlos.
 
 **Modelo de dados (proposto).**
 - `special_affiliates/{especialAffiliateId}` = `{ active, subAffiliateIds: string[], networkCpaValue, networkRevPercentage, updatedAt }` — marca o especial, lista os subs e guarda a taxa da sub-rede. **NÃO** guardar hierarquia no mirror `affiliates/` (o sync sobrescreve).
@@ -75,20 +76,18 @@ do master, porém **escopada à própria sub-rede** e com menos features.
 1. **Modelo + setup do MASTER** — coleção + serviço + rules + UI na lista de afiliados (promover especial, vincular subs, setar as taxas). *(em andamento)*
 2. **Escopo no proxy + rules** para a sub-rede do especial.
 3. **View do especial** — dashboard escopado (funil da sub-rede + própria produção) + lista de subs + convites; esconder features de master.
-4. **Cálculo do spread + exibição** (ganho do especial; margem da agência só no master) — **bloqueado** até o Carlos confirmar o modelo de comissão.
+4. **Cálculo do spread + exibição** (ganho do especial; margem da agência só no master) — **desbloqueado** (modelo confirmado; só Q6 operacional em aberto, não trava o cálculo).
 
-**Roteiro p/ o Carlos — CONSOLIDADO** (cobre também as perguntas em aberto do **B1 · lucro líquido** — mesmo tema de dinheiro). 💰 **Comissão & lucro:**
-1. A base da "comissão recebida da casa" é exatamente o `total_commission` da OTG, ou há **acordo diferente por casa** (Superbet/SportingBet)? *(B1)*
-2. Há **custos fixos** da agência a descontar (operacional, taxas) antes do lucro líquido? *(B1)*
-3. O especial ganha por **spread** (recebe a taxa da sub-rede, repassa menor ao sub, fica com a diferença) ou **override** (sub recebe normal da agência e o especial ganha um % por cima)?
-4. O ganho do especial incide **só sobre a produção dos subs**, ou também sobre a **própria**?
-5. A taxa do especial é **CPA R$ + REV %** ou **% único**? Tem **teto**? O especial pode mexer ou só o master?
-6. Quem **paga** os subs: a agência direto, ou sai do bolo do especial?
-7. Mostrar lucro líquido também **por casa e por período**, além do consolidado? *(B1)*
+**Roteiro p/ o Carlos — RESPONDIDO em 2026-05-29** (só falta Q6).
+1. Base da casa = exatamente `total_commission`. ✅ *(B1)*
+2. Custos fixos a descontar? **Ainda não.** ✅ *(B1)*
+3. **Spread** — o master seta a comissão do especial sobre os afiliados vinculados. ✅
+4. Ganho do especial = **subs + produção própria**, com **cards separados por afiliado** (dados individuais). ✅
+5. O **especial** define a comissão dos próprios subs (teto = a taxa que o master setou pra ele). ✅
+6. **⏳ Em aberto** — "não ficou clara". Reperguntar: quem desembolsa o repasse aos subs (agência direto vs. do bolo do especial). Não bloqueia o cálculo no Boost.
+7. Lucro líquido **por casa e por período**: **sim.** ✅ *(B1 — novo item a construir)*
 
-Travado por nós (confirmar só se for diferente): 1 especial por afiliado; **1 nível** (sem sub-do-sub); o especial vê só a própria sub-rede.
-
-Respostas **1/2/7** destravam o B1 (tirar o "provisório" do `calcNetProfit`); **3–6** destravam a **Fase 4** do especial.
+Travado: 1 especial por afiliado; **1 nível**; o especial vê só a própria sub-rede.
 
 **Origem da feature (resolvido 2026-05-29).** A "feature de sub-afiliado incompleta" notada em 28/05 **É este afiliado especial** — não há sistema legado a investigar; está especificado aqui e em implementação (Fase 1 feita).
 

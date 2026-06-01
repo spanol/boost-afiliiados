@@ -298,7 +298,7 @@ export default function AdminDashboard() {
         </div>
       </section>
 
-      {/* B1 · Lucro líquido (regra provisória — ver comentário em affiliateService.calcNetProfit) */}
+      {/* B1 · Lucro líquido (regra confirmada pelo Carlos — ver affiliateService.calcNetProfit) */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -320,7 +320,7 @@ export default function AdminDashboard() {
               </h3>
               <p className="text-[11px] font-medium text-slate-500 dark:text-neutral-400 mt-2 max-w-2xl">
                 Comissão recebida das casas − repasse aos afiliados.{' '}
-                <span className="italic">Regra provisória (a confirmar): sem custos fixos e usando o total reportado pela casa.</span>
+                <span className="italic">Sem custos fixos, usando o total reportado pela casa.</span>
               </p>
             </div>
             <div className="relative shrink-0 p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-500">
