@@ -92,6 +92,52 @@ async function startServer() {
     return value ?? null;
   };
 
+  // B3 · Afiliado especial define a comissão de um sub-afiliado da própria sub-rede.
+  // `affiliate_configs` é admin-only nas rules; este endpoint grava via Admin SDK
+  // após validar que o caller é o especial DAQUELE sub e que a taxa respeita o teto
+  // (a taxa que o master setou para o especial). requireAuth — o especial é `client`.
+  app.post('/api/special/sub-config', requireAuth, async (req, res) => {
+    if (!adminDb) return res.status(500).json({ error: 'Firebase Admin não está inicializado.' });
+    try {
+      const user = (req as any).user;
+      const callerAffiliateId = user?.affiliateId ? String(user.affiliateId) : null;
+      if (!callerAffiliateId) return res.status(403).json({ error: 'Sua conta não está vinculada a um afiliado.' });
+
+      const { subAffiliateId, cpaValue, revPercentage } = req.body ?? {};
+      const subId = subAffiliateId != null ? String(subAffiliateId) : '';
+      if (!subId) return res.status(400).json({ error: 'subAffiliateId é obrigatório.' });
+
+      const cpa = Number(cpaValue) || 0;
+      const rev = Number(revPercentage) || 0;
+      if (cpa < 0 || rev < 0) return res.status(400).json({ error: 'Valores não podem ser negativos.' });
+
+      const specialSnap = await adminDb.collection('special_affiliates').doc(callerAffiliateId).get();
+      const special = specialSnap.exists ? (specialSnap.data() as any) : null;
+      if (!special?.active) return res.status(403).json({ error: 'Você não é um afiliado especial ativo.' });
+      const subs = Array.isArray(special.subAffiliateIds) ? special.subAffiliateIds.map((s: any) => String(s)) : [];
+      if (!subs.includes(subId)) return res.status(403).json({ error: 'Este afiliado não pertence à sua sub-rede.' });
+
+      // Teto = taxa do especial definida pelo master.
+      const ceilCpa = Number(special.networkCpaValue) || 0;
+      const ceilRev = Number(special.networkRevPercentage) || 0;
+      if (cpa > ceilCpa || rev > ceilRev) {
+        return res.status(400).json({ error: `Taxa acima do teto do master (CPA até R$ ${ceilCpa}, REV até ${ceilRev}%).` });
+      }
+
+      await adminDb.collection('affiliate_configs').doc(subId).set({
+        affiliateId: subId,
+        cpaValue: cpa,
+        revPercentage: rev,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+
+      return res.json({ affiliateId: subId, cpaValue: cpa, revPercentage: rev });
+    } catch (error: any) {
+      console.error('Error setting sub-affiliate config:', error);
+      return res.status(500).json({ error: error.message || 'Erro interno.' });
+    }
+  });
+
   app.post('/api/create-user', requireAdmin, async (req, res) => {
     if (!adminApp || !adminDb) {
       return res.status(500).json({ error: 'Firebase Admin não está inicializado.' });

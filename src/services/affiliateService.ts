@@ -152,6 +152,20 @@ export async function saveSpecialAffiliate(data: SpecialAffiliate): Promise<void
   }
 }
 
+// O afiliado especial define a comissão de um sub da própria sub-rede (via servidor,
+// que valida posse + teto — affiliate_configs é admin-only nas rules).
+export async function saveSubAffiliateConfig(subAffiliateId: string, cpaValue: number, revPercentage: number): Promise<void> {
+  const response = await authFetch('/api/special/sub-config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    body: JSON.stringify({ subAffiliateId, cpaValue, revPercentage }),
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.error || errorData.message || `Erro: ${response.status}`);
+  }
+}
+
 // Espelha a flag isSpecial no doc do usuário (conveniência p/ roteamento — Fase 3).
 export async function setUserSpecialFlag(uid: string, isSpecial: boolean): Promise<void> {
   if (!uid) return;

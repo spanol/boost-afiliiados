@@ -11,6 +11,7 @@ interface UserProfile {
   avatarUrl?: string;
   affiliateId?: string;
   mustChangePassword?: boolean;
+  isSpecial?: boolean; // B3 · afiliado especial (vê a própria sub-rede)
 }
 
 interface AuthContextType {

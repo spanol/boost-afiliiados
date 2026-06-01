@@ -14,13 +14,16 @@ import Settings from './pages/Settings';
 import Contacts from './pages/Contacts';
 import AffiliatesList from './pages/AffiliatesList';
 import AffiliateDetails from './pages/AffiliateDetails';
+import SpecialDashboard from './pages/SpecialDashboard';
 import NotFound from './pages/NotFound';
 import DashboardLayout from './components/DashboardLayout';
 
-// Página inicial do afiliado: a própria visão de dados em /affiliates/{id}.
-// Sem affiliateId vinculado, cai no perfil.
-const clientHome = (profile: { affiliateId?: string | null } | null) =>
-  profile?.affiliateId ? `/affiliates/${profile.affiliateId}` : '/profile';
+// Página inicial do afiliado: especial → painel da sub-rede (/network); afiliado
+// comum → a própria visão de dados em /affiliates/{id}; sem affiliateId → perfil.
+const clientHome = (profile: { affiliateId?: string | null; isSpecial?: boolean } | null) => {
+  if (profile?.isSpecial) return '/network';
+  return profile?.affiliateId ? `/affiliates/${profile.affiliateId}` : '/profile';
+};
 
 const ProtectedRoute = ({ children, role }: { children: React.ReactNode, role?: 'admin' | 'client' }) => {
   const { user, profile, loading } = useAuth();
@@ -79,6 +82,11 @@ export default function App() {
             <Route path="/client" element={
               <ProtectedRoute role="client">
                 <ClientDashboard />
+              </ProtectedRoute>
+            } />
+            <Route path="/network" element={
+              <ProtectedRoute role="client">
+                <SpecialDashboard />
               </ProtectedRoute>
             } />
             <Route path="/profile" element={<Profile />} />
