@@ -38,17 +38,18 @@ export default function DashboardLayout() {
     { 
       label: 'Geral', 
       items: [
-        {
+        // O afiliado ESPECIAL não tem um "Dashboard" próprio: o /network é
+        // representado pelo item "Afiliados" abaixo. Sem isso, Dashboard e
+        // Afiliados apontavam ambos pra /network e os dois ficavam ativos.
+        ...(profile?.isSpecial ? [] : [{
           label: 'Dashboard',
           path: profile?.role === 'admin'
             ? '/admin'
-            : profile?.isSpecial
-              ? '/network'
-              : (profile?.affiliateId ? `/affiliates/${profile.affiliateId}` : '/profile'),
+            : (profile?.affiliateId ? `/affiliates/${profile.affiliateId}` : '/profile'),
           icon: LayoutDashboard
-        },
+        }]),
         // Item "Afiliados": o master vê a lista completa (/affiliates); o afiliado
-        // ESPECIAL vê a própria sub-rede (/network). O afiliado comum não tem este
+        // ESPECIAL vê a própria rede (/network). O afiliado comum não tem este
         // módulo — o antigo "Clientes" levava a /affiliates (403) e não será usado.
         ...(profile?.role === 'admin'
           ? [{ label: 'Afiliados', path: '/affiliates', icon: Users }]
@@ -165,7 +166,7 @@ export default function DashboardLayout() {
                 : location.pathname === '/financeiro'
                 ? 'Financeiro'
                 : location.pathname === '/network'
-                  ? 'Painel da Sub-rede'
+                  ? 'Painel da Rede'
                   : (location.pathname === '/client' || (profile?.role === 'client' && location.pathname.startsWith('/affiliates')))
                     ? 'Painel do Cliente'
                     : 'Minha Conta'}

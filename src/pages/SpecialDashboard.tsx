@@ -132,7 +132,7 @@ export default function SpecialDashboard() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
         <Loader2 size={40} className="text-amber-500 animate-spin" />
-        <p className="text-xs font-bold text-slate-400 dark:text-neutral-500 uppercase tracking-widest animate-pulse">Carregando sua sub-rede...</p>
+        <p className="text-xs font-bold text-slate-400 dark:text-neutral-500 uppercase tracking-widest animate-pulse">Carregando sua rede...</p>
       </div>
     );
   }
@@ -241,7 +241,7 @@ export default function SpecialDashboard() {
             <span className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20">
               <Crown size={24} className="text-amber-500" />
             </span>
-            Sua sub-rede
+            Sua rede
           </h1>
           <p className="text-slate-500 dark:text-neutral-400 text-sm mt-2">{subIds.length} sub-afiliado(s) + sua produção.</p>
         </div>
@@ -271,7 +271,7 @@ export default function SpecialDashboard() {
 
       {/* Funil agregado da sub-rede */}
       <section>
-        <h3 className="text-[10px] uppercase font-bold tracking-widest text-slate-400 dark:text-neutral-500 mb-3 px-1">Funil da sub-rede</h3>
+        <h3 className="text-[10px] uppercase font-bold tracking-widest text-slate-400 dark:text-neutral-500 mb-3 px-1">Funil da rede</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {funnel.map((item, idx) => (
             <motion.div
