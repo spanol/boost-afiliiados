@@ -150,7 +150,9 @@ export default function AdminDashboard() {
   const chartData = [...scopedResults]
     .sort((a, b) => (b.total_commission || 0) - (a.total_commission || 0))
     .map(item => {
-      const label = String(item.affiliate_name || item.name || item.affiliate_id || '---');
+      // A API externa nomeia o afiliado em `label` (e o id em `id`); sem isso as
+      // barras do gráfico ficavam rotuladas "---".
+      const label = String(item.affiliate_name || item.name || item.label || item.affiliate_id || item.id || '---');
       return {
         name: label,
         Comissão: item.total_commission || 0,

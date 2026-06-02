@@ -139,7 +139,9 @@ export default function SpecialDashboard() {
 
   const renderAffiliateCard = (id: string, isOwn: boolean, idx: number) => {
     const r = rowById(id) || {};
-    const name = isOwn ? (profile?.name || 'Você') : (r.affiliate_name || r.name || `#${id}`);
+    // A API externa traz o nome do afiliado no campo `label` (não em affiliate_name);
+    // sem checá-lo, o card do sub aparecia como o ID cru (#cmovjh...).
+    const name = isOwn ? (profile?.name || 'Você') : (r.affiliate_name || r.name || r.label || `#${id}`);
     const stats = [
       { label: 'Cadastros', value: r.registrations || 0 },
       { label: 'Depósitos', value: r.first_deposits || 0 },
