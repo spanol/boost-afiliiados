@@ -12,7 +12,8 @@ import {
   X, 
   Sun,
   Moon,
-  Users
+  Users,
+  Crown
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -55,6 +56,7 @@ export default function DashboardLayout() {
           icon: Users
         },
         ...(profile?.role === 'admin' ? [
+          { label: 'Afiliados Especiais', path: '/special-affiliates', icon: Crown },
           { label: 'Configurações', path: '/settings', icon: Settings },
           { label: 'Contatos', path: '/contacts', icon: User }
         ] : [])
@@ -154,11 +156,13 @@ export default function DashboardLayout() {
           <h2 className="text-xs font-bold text-slate-700 uppercase tracking-widest dark:text-neutral-300">
             {location.pathname === '/admin'
               ? 'Painel Administrativo'
-              : location.pathname === '/network'
-                ? 'Painel da Sub-rede'
-                : (location.pathname === '/client' || (profile?.role === 'client' && location.pathname.startsWith('/affiliates')))
-                  ? 'Painel do Cliente'
-                  : 'Minha Conta'}
+              : location.pathname === '/special-affiliates'
+                ? 'Afiliados Especiais'
+                : location.pathname === '/network'
+                  ? 'Painel da Sub-rede'
+                  : (location.pathname === '/client' || (profile?.role === 'client' && location.pathname.startsWith('/affiliates')))
+                    ? 'Painel do Cliente'
+                    : 'Minha Conta'}
           </h2>
           <div className="flex items-center gap-4">
             <button

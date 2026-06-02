@@ -15,6 +15,7 @@ import Contacts from './pages/Contacts';
 import AffiliatesList from './pages/AffiliatesList';
 import AffiliateDetails from './pages/AffiliateDetails';
 import SpecialDashboard from './pages/SpecialDashboard';
+import SpecialAffiliatesList from './pages/SpecialAffiliatesList';
 import NotFound from './pages/NotFound';
 import DashboardLayout from './components/DashboardLayout';
 
@@ -97,6 +98,11 @@ export default function App() {
               </ProtectedRoute>
             } />
             <Route path="/affiliates" element={<AffiliatesList />} />
+            <Route path="/special-affiliates" element={
+              <ProtectedRoute role="admin">
+                <SpecialAffiliatesList />
+              </ProtectedRoute>
+            } />
             <Route path="/affiliates/:id" element={<AffiliateDetails />} />
           </Route>
 
