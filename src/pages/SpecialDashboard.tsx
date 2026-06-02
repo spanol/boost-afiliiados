@@ -68,12 +68,14 @@ export default function SpecialDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ownId, range.startDate, range.endDate]);
 
-  // Taxa do especial (teto), no formato de config para reutilizar calcAffiliatePayout.
-  const netRate = useMemo<AffiliateConfig>(() => ({
+  // Taxa PRÓPRIA do especial (o CPA/REV que o master configurou pra ele). É a
+  // referência do ganho: a agência paga o especial por essa taxa sobre toda a
+  // rede; ele repassa cada sub pela taxa que define e fica com o spread.
+  const ownConfig = useMemo<AffiliateConfig>(() => ({
     affiliateId: ownId,
-    cpaValue: special?.networkCpaValue || 0,
-    revPercentage: special?.networkRevPercentage || 0,
-  }), [ownId, special]);
+    cpaValue: configs[ownId]?.cpaValue || 0,
+    revPercentage: configs[ownId]?.revPercentage || 0,
+  }), [ownId, configs]);
 
   const rowById = (id: string) => results.find((r) => String(r.affiliate_id ?? r.id ?? '') === String(id));
   const ownRow = rowById(ownId);
@@ -87,12 +89,13 @@ export default function SpecialDashboard() {
     qualifiedCpa: acc.qualifiedCpa + (r.qualified_cpa || 0),
   }), { registrations: 0, firstDeposits: 0, deposit: 0, qualifiedCpa: 0 });
 
-  // Ganho do especial: produção própria + spread sobre cada sub.
-  const ownPayout = calcAffiliatePayout(ownRow, configs[ownId]);
+  // Lucro líquido do especial = link dele (produção própria) + lucro da rede (spread).
+  // Spread por sub = taxa própria do especial − taxa que ele definiu pro sub.
+  const ownPayout = calcAffiliatePayout(ownRow, ownConfig);
   const spreadTotal = subIds.reduce((sum, id) => {
     const r = rowById(id);
     if (!r) return sum;
-    return sum + (calcAffiliatePayout(r, netRate) - calcAffiliatePayout(r, configs[id]));
+    return sum + (calcAffiliatePayout(r, ownConfig) - calcAffiliatePayout(r, configs[id]));
   }, 0);
   const earnings = ownPayout + spreadTotal;
 
@@ -189,13 +192,13 @@ export default function SpecialDashboard() {
         {!isOwn && (
           <div className="relative mt-5 pt-4 border-t border-slate-100 dark:border-neutral-800">
             <p className="text-[10px] font-bold text-slate-400 dark:text-neutral-500 uppercase tracking-widest mb-2">
-              Comissão do sub <span className="normal-case font-medium">(teto: R$ {netRate.cpaValue}/CPA · {netRate.revPercentage}% REV)</span>
+              Comissão do sub <span className="normal-case font-medium">(sua taxa: R$ {ownConfig.cpaValue}/CPA · {ownConfig.revPercentage}% REV)</span>
             </p>
             <div className="flex items-center gap-2">
               <div className="relative flex-1">
                 <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-400 dark:text-neutral-500">R$</span>
                 <input
-                  type="number" min="0" step="0.01" max={netRate.cpaValue || undefined}
+                  type="number" min="0" step="0.01"
                   value={subEdits[id]?.cpaValue ?? 0}
                   onChange={(e) => handleSubChange(id, 'cpaValue', e.target.value)}
                   className="w-full pl-7 pr-2 py-2 bg-slate-50 dark:bg-neutral-800/60 border border-slate-200 dark:border-neutral-700 rounded-lg text-[11px] font-bold outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all dark:text-white"
@@ -204,7 +207,7 @@ export default function SpecialDashboard() {
               <div className="relative flex-1">
                 <Percent size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-300 dark:text-neutral-500" />
                 <input
-                  type="number" min="0" step="0.1" max={netRate.revPercentage || undefined}
+                  type="number" min="0" step="0.1"
                   value={subEdits[id]?.revPercentage ?? 0}
                   onChange={(e) => handleSubChange(id, 'revPercentage', e.target.value)}
                   className="w-full pl-6 pr-2 py-2 bg-slate-50 dark:bg-neutral-800/60 border border-slate-200 dark:border-neutral-700 rounded-lg text-[11px] font-bold outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all dark:text-white"
@@ -252,11 +255,11 @@ export default function SpecialDashboard() {
         <div className="absolute top-0 right-0 w-56 h-56 bg-emerald-500/10 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
         <div className="relative">
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 mb-3 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 text-[10px] font-bold uppercase tracking-widest">
-            Seu ganho no período <HelpCircle size={12} />
+            Lucro líquido no período <HelpCircle size={12} />
           </span>
           <h3 className="text-3xl md:text-4xl font-bold tracking-tighter text-emerald-700 dark:text-emerald-400">{brl(earnings)}</h3>
           <p className="text-[11px] font-medium text-slate-500 dark:text-neutral-400 mt-2 max-w-2xl">
-            Produção própria ({brl(ownPayout)}) + spread sobre os sub-afiliados ({brl(spreadTotal)}).
+            Seu link ({brl(ownPayout)}) + lucro da rede ({brl(spreadTotal)}) — já com os repasses aos sub-afiliados descontados.
           </p>
         </div>
         <div className="relative shrink-0 p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-500">

@@ -102,15 +102,20 @@ export async function saveAffiliateConfig(config: AffiliateConfig): Promise<void
 }
 
 // --- B3 · Afiliado especial (Fase 1: modelo + setup do master) ----------------
-// Marca um afiliado como ESPECIAL, lista seus sub-afiliados e guarda a taxa do
-// especial sobre a sub-rede. Coleção própria da Boost (NÃO o mirror `affiliates`,
-// que o sync sobrescreve). Comissão = spread (provisório — confirmar com o Carlos).
+// Marca um afiliado como ESPECIAL e lista seus sub-afiliados. Coleção própria da
+// Boost (NÃO o mirror `affiliates`, que o sync sobrescreve). Modelo de comissão
+// (confirmado pelo Carlos): o ganho do especial é o SPREAD sobre a TAXA PRÓPRIA
+// dele (o CPA/REV que o master configura em `affiliate_configs`) — a agência paga
+// o especial pela taxa própria sobre toda a rede, ele repassa cada sub pela taxa
+// que ele mesmo define no /network, e fica com a diferença. Sem teto do master.
 export interface SpecialAffiliate {
   affiliateId: string;
   active: boolean;
   subAffiliateIds: string[];
-  networkCpaValue: number;       // taxa do especial sobre a sub-rede — CPA (R$)
-  networkRevPercentage: number;  // taxa do especial sobre a sub-rede — REV (%)
+  // @deprecated — o teto do master foi removido (o especial seta a rede livremente).
+  // Mantidos opcionais só para compat com docs antigos; não são mais escritos/lidos.
+  networkCpaValue?: number;
+  networkRevPercentage?: number;
   updatedAt?: any;
 }
 
@@ -142,8 +147,6 @@ export async function saveSpecialAffiliate(data: SpecialAffiliate): Promise<void
     await setDoc(ref, {
       active: !!data.active,
       subAffiliateIds: (data.subAffiliateIds ?? []).map(String),
-      networkCpaValue: Number(data.networkCpaValue) || 0,
-      networkRevPercentage: Number(data.networkRevPercentage) || 0,
       updatedAt: serverTimestamp(),
     }, { merge: true });
   } catch (error) {

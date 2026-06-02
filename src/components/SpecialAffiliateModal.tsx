@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'motion/react';
-import { Crown, X, Save, Loader2, Percent, Search } from 'lucide-react';
+import { Crown, X, Save, Loader2, Search } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { saveSpecialAffiliate, setUserSpecialFlag, SpecialAffiliate } from '../services/affiliateService';
 import { useToast } from '../contexts/ToastContext';
@@ -21,16 +21,16 @@ interface Props {
 }
 
 // B3 · Modal de gestão do afiliado especial (compartilhado entre a lista de
-// afiliados e a página de dados do afiliado). Master promove/rebaixa, define a
-// taxa da sub-rede e vincula sub-afiliados (1 especial por afiliado, 1 nível).
+// afiliados e a página de dados do afiliado). Master promove/rebaixa e vincula
+// sub-afiliados (1 especial por afiliado, 1 nível). A taxa da sub-rede NÃO é
+// definida aqui — o próprio especial seta a comissão de cada sub na view dele
+// (/network); o ganho dele é o spread sobre a taxa própria (decisão do Carlos).
 export default function SpecialAffiliateModal({ affiliate, allAffiliates, specials, onClose, onSaved }: Props) {
   const { push } = useToast();
   const espId = String(affiliate.id);
   const existing = specials[espId];
 
   const [active, setActive] = useState(existing?.active ?? false);
-  const [networkCpaValue, setNetworkCpaValue] = useState<number | string>(existing?.networkCpaValue ?? 0);
-  const [networkRevPercentage, setNetworkRevPercentage] = useState<number | string>(existing?.networkRevPercentage ?? 0);
   const [subs, setSubs] = useState<string[]>(existing?.subAffiliateIds ?? []);
   const [search, setSearch] = useState('');
   const [saving, setSaving] = useState(false);
@@ -61,8 +61,6 @@ export default function SpecialAffiliateModal({ affiliate, allAffiliates, specia
         affiliateId: espId,
         active,
         subAffiliateIds: active ? subs : [],
-        networkCpaValue: Number(networkCpaValue) || 0,
-        networkRevPercentage: Number(networkRevPercentage) || 0,
       });
       if (affiliate.userUid) {
         await setUserSpecialFlag(affiliate.userUid, active);
@@ -114,34 +112,11 @@ export default function SpecialAffiliateModal({ affiliate, allAffiliates, specia
                 </p>
               )}
 
-              <div>
-                <p className="text-[10px] font-bold text-slate-400 dark:text-neutral-500 uppercase tracking-widest mb-2">
-                  Taxa do especial sobre a sub-rede
-                  <span className="ml-2 normal-case font-medium italic text-slate-400">(é o teto da comissão dos subs)</span>
-                </p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="relative">
-                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-400 dark:text-neutral-500">R$</span>
-                    <input
-                      type="number" min="0" step="0.01"
-                      value={networkCpaValue}
-                      onChange={(e) => setNetworkCpaValue(e.target.value === '' ? '' : Math.max(0, parseFloat(e.target.value) || 0))}
-                      placeholder="CPA"
-                      className="w-full pl-7 pr-2 py-2.5 bg-slate-50 dark:bg-neutral-800/60 border border-slate-200 dark:border-neutral-700 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all dark:text-white"
-                    />
-                  </div>
-                  <div className="relative">
-                    <Percent size={12} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-300 dark:text-neutral-500" />
-                    <input
-                      type="number" min="0" max="100" step="0.1"
-                      value={networkRevPercentage}
-                      onChange={(e) => setNetworkRevPercentage(e.target.value === '' ? '' : Math.max(0, parseFloat(e.target.value) || 0))}
-                      placeholder="REV"
-                      className="w-full pl-6 pr-2 py-2.5 bg-slate-50 dark:bg-neutral-800/60 border border-slate-200 dark:border-neutral-700 rounded-xl text-xs font-bold outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all dark:text-white"
-                    />
-                  </div>
-                </div>
-              </div>
+              <p className="text-[11px] text-slate-500 dark:text-neutral-400 bg-slate-50 dark:bg-neutral-800/40 border border-slate-100 dark:border-neutral-800 rounded-xl px-3 py-2.5">
+                A comissão de cada sub-afiliado é definida pelo próprio especial no
+                painel dele (<span className="font-semibold">/network</span>). O ganho
+                dele é o spread sobre a taxa própria.
+              </p>
 
               <div>
                 <div className="flex items-center justify-between mb-2">
