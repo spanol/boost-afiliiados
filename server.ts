@@ -534,8 +534,26 @@ async function startServer() {
         req.query.affiliateIds = scoped.join(',');
       }
 
-      const queryString = new URLSearchParams(req.query as any).toString();
-      const targetUrl = id 
+      // A API externa NÃO aceita affiliateIds separados por vírgula (devolve vazio);
+      // ela espera o parâmetro REPETIDO (affiliateIds=a&affiliateIds=b). Expandimos
+      // aqui — senão o afiliado especial (own + subs) e o filtro multi-marca por
+      // campanha (vários ids) recebem 0 linhas. Os demais params passam direto.
+      const outParams = new URLSearchParams();
+      for (const [key, value] of Object.entries(req.query as Record<string, any>)) {
+        if (value == null) continue;
+        if (key === 'affiliateIds') {
+          const raw = Array.isArray(value) ? value : [value];
+          raw
+            .flatMap((v) => String(v).split(','))
+            .map((s) => s.trim())
+            .filter(Boolean)
+            .forEach((affId) => outParams.append('affiliateIds', affId));
+        } else {
+          outParams.append(key, String(value));
+        }
+      }
+      const queryString = outParams.toString();
+      const targetUrl = id
         ? `${BASE_URL}/api/v2/external/${endpoint}/${id}${queryString ? '?' + queryString : ''}`
         : `${BASE_URL}/api/v2/external/${endpoint}${queryString ? '?' + queryString : ''}`;
         
