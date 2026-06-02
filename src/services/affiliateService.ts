@@ -169,6 +169,53 @@ export async function saveSubAffiliateConfig(subAffiliateId: string, cpaValue: n
   }
 }
 
+// --- B4 · Dados de pagamento do afiliado (PIX + dados de NF) ------------------
+// Coletados pelo próprio afiliado (afiliado preenche, admin só visualiza). PII
+// numa coleção server-only (payment_profiles); todo acesso passa pelo servidor.
+export interface PaymentProfile {
+  affiliateId?: string;
+  pixKeyType?: string;                 // cpf | cnpj | email | telefone | aleatoria
+  pixKey?: string;
+  documentType?: 'cpf' | 'cnpj';
+  document?: string;                   // CPF ou CNPJ
+  legalName?: string;                  // Razão Social / Nome completo
+  address?: string;
+  updatedAt?: any;
+}
+
+// Perfil de pagamento do próprio afiliado logado (escopado pelo token no server).
+export async function fetchMyPaymentProfile(): Promise<PaymentProfile> {
+  const response = await authFetch('/api/payment-profile', { method: 'GET', headers: { Accept: 'application/json' } });
+  if (!response.ok) {
+    const e = await response.json().catch(() => ({}));
+    throw new Error(e.error || e.message || `Erro: ${response.status}`);
+  }
+  return response.json();
+}
+
+export async function saveMyPaymentProfile(data: PaymentProfile): Promise<PaymentProfile> {
+  const response = await authFetch('/api/payment-profile', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) {
+    const e = await response.json().catch(() => ({}));
+    throw new Error(e.error || e.message || `Erro: ${response.status}`);
+  }
+  return response.json();
+}
+
+// Perfil de pagamento de um afiliado (admin — visualização).
+export async function fetchPaymentProfile(affiliateId: string): Promise<PaymentProfile> {
+  const response = await authFetch(`/api/payment-profile/${encodeURIComponent(affiliateId)}`, { method: 'GET', headers: { Accept: 'application/json' } });
+  if (!response.ok) {
+    const e = await response.json().catch(() => ({}));
+    throw new Error(e.error || e.message || `Erro: ${response.status}`);
+  }
+  return response.json();
+}
+
 // Espelha a flag isSpecial no doc do usuário (conveniência p/ roteamento — Fase 3).
 export async function setUserSpecialFlag(uid: string, isSpecial: boolean): Promise<void> {
   if (!uid) return;

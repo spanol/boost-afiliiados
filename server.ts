@@ -132,6 +132,65 @@ async function startServer() {
     }
   });
 
+  // B4 · Dados de pagamento do afiliado (PIX + dados de NF). Preenchidos pelo
+  // próprio afiliado; o admin apenas visualiza. São PII → coleção server-only
+  // (payment_profiles), gravada via Admin SDK. O afiliado lê/grava o PRÓPRIO
+  // perfil (escopado pelo affiliateId do token); o admin lê o de qualquer um.
+  const sanitizePaymentProfile = (body: any) => ({
+    pixKeyType: body?.pixKeyType ? String(body.pixKeyType).trim() : '',
+    pixKey: body?.pixKey ? String(body.pixKey).trim() : '',
+    documentType: body?.documentType === 'cnpj' ? 'cnpj' : 'cpf',
+    document: body?.document ? String(body.document).trim() : '',
+    legalName: body?.legalName ? String(body.legalName).trim() : '',
+    address: body?.address ? String(body.address).trim() : '',
+  });
+
+  app.get('/api/payment-profile', requireAuth, async (req, res) => {
+    if (!adminDb) return res.status(500).json({ error: 'Firebase Admin não está inicializado.' });
+    try {
+      const user = (req as any).user;
+      const affiliateId = user?.affiliateId ? String(user.affiliateId) : null;
+      if (!affiliateId) return res.status(400).json({ error: 'Sua conta não está vinculada a um afiliado.' });
+      const snap = await adminDb.collection('payment_profiles').doc(affiliateId).get();
+      return res.json(snap.exists ? { affiliateId, ...snap.data() } : { affiliateId });
+    } catch (error: any) {
+      console.error('Error fetching payment profile:', error);
+      return res.status(500).json({ error: error.message || 'Erro interno.' });
+    }
+  });
+
+  app.post('/api/payment-profile', requireAuth, async (req, res) => {
+    if (!adminDb) return res.status(500).json({ error: 'Firebase Admin não está inicializado.' });
+    try {
+      const user = (req as any).user;
+      const affiliateId = user?.affiliateId ? String(user.affiliateId) : null;
+      if (!affiliateId) return res.status(400).json({ error: 'Sua conta não está vinculada a um afiliado.' });
+      const data = sanitizePaymentProfile(req.body);
+      if (!data.pixKey) return res.status(400).json({ error: 'A chave PIX é obrigatória.' });
+      await adminDb.collection('payment_profiles').doc(affiliateId).set({
+        affiliateId,
+        ...data,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+      return res.json({ affiliateId, ...data });
+    } catch (error: any) {
+      console.error('Error saving payment profile:', error);
+      return res.status(500).json({ error: error.message || 'Erro interno.' });
+    }
+  });
+
+  app.get('/api/payment-profile/:affiliateId', requireAdmin, async (req, res) => {
+    if (!adminDb) return res.status(500).json({ error: 'Firebase Admin não está inicializado.' });
+    try {
+      const { affiliateId } = req.params;
+      const snap = await adminDb.collection('payment_profiles').doc(String(affiliateId)).get();
+      return res.json(snap.exists ? { affiliateId, ...snap.data() } : { affiliateId });
+    } catch (error: any) {
+      console.error('Error fetching payment profile (admin):', error);
+      return res.status(500).json({ error: error.message || 'Erro interno.' });
+    }
+  });
+
   app.post('/api/create-user', requireAdmin, async (req, res) => {
     if (!adminApp || !adminDb) {
       return res.status(500).json({ error: 'Firebase Admin não está inicializado.' });

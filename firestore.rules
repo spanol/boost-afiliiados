@@ -70,5 +70,13 @@ service cloud.firestore {
     match /audit_logs/{logId} {
       allow read, write: if isAdmin();
     }
+
+    // B4 · Dados de pagamento do afiliado (PIX/NF — PII). Lidos/gravados pelo
+    // servidor via Admin SDK (que ignora estas regras); o afiliado acessa só o
+    // próprio perfil pelos endpoints autenticados. Cliente direto é bloqueado;
+    // admin pode ler direto.
+    match /payment_profiles/{affiliateId} {
+      allow read, write: if isAdmin();
+    }
   }
 }

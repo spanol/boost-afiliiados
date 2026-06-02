@@ -13,7 +13,8 @@ import {
   Sun,
   Moon,
   Users,
-  Crown
+  Crown,
+  Wallet
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -54,6 +55,10 @@ export default function DashboardLayout() {
           : profile?.isSpecial
             ? [{ label: 'Afiliados', path: '/network', icon: Users }]
             : []),
+        // Financeiro (B4): coleta de PIX + dados de NF. Só pro afiliado (tem affiliateId).
+        ...(profile?.role !== 'admin' && profile?.affiliateId
+          ? [{ label: 'Financeiro', path: '/financeiro', icon: Wallet }]
+          : []),
         ...(profile?.role === 'admin' ? [
           { label: 'Afiliados Especiais', path: '/special-affiliates', icon: Crown },
           { label: 'Configurações', path: '/settings', icon: Settings },
@@ -157,6 +162,8 @@ export default function DashboardLayout() {
               ? 'Painel Administrativo'
               : location.pathname === '/special-affiliates'
                 ? 'Afiliados Especiais'
+                : location.pathname === '/financeiro'
+                ? 'Financeiro'
                 : location.pathname === '/network'
                   ? 'Painel da Sub-rede'
                   : (location.pathname === '/client' || (profile?.role === 'client' && location.pathname.startsWith('/affiliates')))

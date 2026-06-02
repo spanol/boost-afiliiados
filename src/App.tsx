@@ -16,6 +16,7 @@ import AffiliatesList from './pages/AffiliatesList';
 import AffiliateDetails from './pages/AffiliateDetails';
 import SpecialDashboard from './pages/SpecialDashboard';
 import SpecialAffiliatesList from './pages/SpecialAffiliatesList';
+import Financeiro from './pages/Financeiro';
 import NotFound from './pages/NotFound';
 import DashboardLayout from './components/DashboardLayout';
 
@@ -88,6 +89,11 @@ export default function App() {
             <Route path="/network" element={
               <ProtectedRoute role="client">
                 <SpecialDashboard />
+              </ProtectedRoute>
+            } />
+            <Route path="/financeiro" element={
+              <ProtectedRoute role="client">
+                <Financeiro />
               </ProtectedRoute>
             } />
             <Route path="/profile" element={<Profile />} />
