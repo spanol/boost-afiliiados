@@ -20,7 +20,7 @@ import { cn } from '../lib/utils';
 import BrandFilter from '../components/BrandFilter';
 import { getBrandName, uniqueBrands, ALL_BRANDS } from '../lib/brand';
 import { useAuth } from '../contexts/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom';
 
 interface Affiliate {
   id: string;
@@ -232,6 +232,10 @@ export default function AffiliatesList() {
   // --- B3 · Afiliado especial -------------------------------------------------
   // O modal foi extraído para <SpecialAffiliateModal>; aqui só abrimos.
   const handleOpenSpecial = (affiliate: Affiliate) => setSpecialModal({ open: true, affiliate });
+
+  // A lista de afiliados é exclusiva do master. Não-admin (afiliado comum ou
+  // especial) é redirecionado pra própria home — o "módulo clientes" não é usado.
+  if (profile && !isAdmin) return <Navigate to="/dashboard" replace />;
 
   return (
     <div className="space-y-8 pb-12">
