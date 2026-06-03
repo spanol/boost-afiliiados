@@ -323,7 +323,7 @@ export default function Home() {
             </div>
 
             <div className="grid md:grid-cols-2 gap-6 lg:gap-8">
-              <FeatureCard
+              {/* <FeatureCard
                 icon={<Lock className="w-5 h-5 text-neutral-400" />}
                 title="Autenticação e Controle de Acesso"
                 desc="Segurança avançada com acessos granulares e personalizados."
@@ -350,7 +350,7 @@ export default function Home() {
                 desc="Gestão estratégica focada nos fluxos críticos do iGaming."
                 image={asset('boost-home/feature-4.png')}
                 delay={0.4}
-              />
+              /> */}
             </div>
           </div>
         </section>
