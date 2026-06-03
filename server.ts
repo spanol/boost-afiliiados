@@ -117,9 +117,10 @@ async function startServer() {
 
   // B3 · Afiliado especial define a comissão de um sub-afiliado da própria sub-rede.
   // `affiliate_configs` é admin-only nas rules; este endpoint grava via Admin SDK
-  // após validar que o caller é o especial DAQUELE sub. SEM teto: o especial seta a
-  // taxa da própria rede livremente (decisão do Carlos — o ganho dele é o spread
-  // sobre a taxa própria). requireAuth — o especial é `client`.
+  // após validar que o caller é o especial DAQUELE sub. COM teto: a taxa do sub não
+  // pode passar da taxa PRÓPRIA do especial (o teto que o master setou) — senão o
+  // spread fica negativo. O ganho do especial é o spread sobre essa taxa própria.
+  // requireAuth — o especial é `client`.
   app.post('/api/special/sub-config', requireAuth, async (req, res) => {
     if (!adminDb) return res.status(500).json({ error: 'Firebase Admin não está inicializado.' });
     try {
@@ -140,6 +141,16 @@ async function startServer() {
       if (!special?.active) return res.status(403).json({ error: 'Você não é um afiliado especial ativo.' });
       const subs = Array.isArray(special.subAffiliateIds) ? special.subAffiliateIds.map((s: any) => String(s)) : [];
       if (!subs.includes(subId)) return res.status(403).json({ error: 'Este afiliado não pertence à sua sub-rede.' });
+
+      // Teto = taxa própria do especial (affiliate_configs do callerAffiliateId).
+      // A taxa do sub não pode passar do teto (senão o spread do especial fica negativo).
+      const ownCfgSnap = await adminDb.collection('affiliate_configs').doc(callerAffiliateId).get();
+      const ownCfg = ownCfgSnap.exists ? (ownCfgSnap.data() as any) : {};
+      const tetoCpa = Number(ownCfg.cpaValue) || 0;
+      const tetoRev = Number(ownCfg.revPercentage) || 0;
+      if (cpa > tetoCpa || rev > tetoRev) {
+        return res.status(400).json({ error: `A comissão do sub não pode passar da sua taxa (teto: R$ ${tetoCpa}/CPA · ${tetoRev}% REV).` });
+      }
 
       await adminDb.collection('affiliate_configs').doc(subId).set({
         affiliateId: subId,

@@ -156,7 +156,9 @@ export default function SpecialDashboard() {
   ];
 
   const handleSubChange = (id: string, field: 'cpaValue' | 'revPercentage', value: string) => {
-    const next = value === '' ? '' : Math.max(0, parseFloat(value) || 0);
+    // Teto = taxa própria do especial: a comissão do sub não passa dela (spread ≥ 0).
+    const teto = field === 'cpaValue' ? (ownConfig.cpaValue || 0) : (ownConfig.revPercentage || 0);
+    const next = value === '' ? '' : Math.min(teto, Math.max(0, parseFloat(value) || 0));
     setSubEdits((prev) => ({ ...prev, [id]: { ...(prev[id] || { cpaValue: 0, revPercentage: 0 }), [field]: next } }));
   };
 
@@ -243,13 +245,13 @@ export default function SpecialDashboard() {
         {!isOwn && (
           <div className="relative mt-5 pt-4 border-t border-slate-100 dark:border-neutral-800">
             <p className="text-[10px] font-bold text-slate-400 dark:text-neutral-500 uppercase tracking-widest mb-2">
-              Comissão do sub <span className="normal-case font-medium">(sua taxa: R$ {ownConfig.cpaValue}/CPA · {ownConfig.revPercentage}% REV)</span>
+              Comissão do sub <span className="normal-case font-medium">(teto: R$ {ownConfig.cpaValue}/CPA · {ownConfig.revPercentage}% REV)</span>
             </p>
             <div className="flex items-center gap-2">
               <div className="relative flex-1">
                 <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-400 dark:text-neutral-500">R$</span>
                 <input
-                  type="number" min="0" step="0.01"
+                  type="number" min="0" max={ownConfig.cpaValue || 0} step="0.01"
                   value={subEdits[id]?.cpaValue ?? 0}
                   onChange={(e) => handleSubChange(id, 'cpaValue', e.target.value)}
                   className="w-full pl-7 pr-2 py-2 bg-slate-50 dark:bg-neutral-800/60 border border-slate-200 dark:border-neutral-700 rounded-lg text-[11px] font-bold outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all dark:text-white"
@@ -258,7 +260,7 @@ export default function SpecialDashboard() {
               <div className="relative flex-1">
                 <Percent size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-300 dark:text-neutral-500" />
                 <input
-                  type="number" min="0" step="0.1"
+                  type="number" min="0" max={ownConfig.revPercentage || 0} step="0.1"
                   value={subEdits[id]?.revPercentage ?? 0}
                   onChange={(e) => handleSubChange(id, 'revPercentage', e.target.value)}
                   className="w-full pl-6 pr-2 py-2 bg-slate-50 dark:bg-neutral-800/60 border border-slate-200 dark:border-neutral-700 rounded-lg text-[11px] font-bold outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all dark:text-white"
