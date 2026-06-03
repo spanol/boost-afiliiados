@@ -9,7 +9,8 @@ import {
   UserPlus,
   Wallet,
   Target,
-  Banknote
+  Banknote,
+  Crown
 } from 'lucide-react';
 import { 
   BarChart, 
@@ -24,7 +25,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { cn, humanizeName } from '../lib/utils';
-import { fetchAffiliates, fetchAllResults, fetchAllResultsByCampaign, fetchAffiliateConfigs, calcAffiliatePayout, CampaignRow } from '../services/affiliateService';
+import { fetchAffiliates, fetchAllResults, fetchAllResultsByCampaign, fetchAffiliateConfigs, calcAffiliatePayout, fetchSpecialAffiliates, CampaignRow, SpecialAffiliate } from '../services/affiliateService';
 import DateRangePicker from '../components/DateRangePicker';
 import CampaignBreakdown from '../components/CampaignBreakdown';
 import InfoTooltip from '../components/InfoTooltip';
@@ -44,6 +45,8 @@ export default function AdminDashboard() {
   const [campaignRows, setCampaignRows] = useState<CampaignRow[]>([]);
   // Filtro multi-marca (só aparece com ≥2 marcas; hoje, só Superbet → oculto).
   const [brandFilter, setBrandFilter] = useState<string>(ALL_BRANDS);
+  // Afiliados especiais (p/ os rankings "Top especiais" e "Top subs").
+  const [specials, setSpecials] = useState<Record<string, SpecialAffiliate>>({});
 
   // Lista de afiliados (com brand) — base do filtro e do mapa id→marca.
   useEffect(() => {
@@ -77,19 +80,22 @@ export default function AdminDashboard() {
     async function getResults() {
       try {
         setLoading(true);
-        const [allResults, cfgs, campaigns] = await Promise.all([
+        const [allResults, cfgs, campaigns, specialData] = await Promise.all([
           fetchAllResults(range),
           fetchAffiliateConfigs(),
           fetchAllResultsByCampaign(range, brandAffiliateIds ?? undefined),
+          fetchSpecialAffiliates(),
         ]);
         setResults(Array.isArray(allResults) ? allResults : []);
         setConfigs(cfgs || {});
         setCampaignRows(campaigns);
+        setSpecials(specialData || {});
       } catch (err) {
         console.error('Error fetching dashboard data:', err);
         setResults([]);
         setConfigs({});
         setCampaignRows([]);
+        setSpecials({});
       } finally {
         setLoading(false);
       }
@@ -102,6 +108,46 @@ export default function AdminDashboard() {
     if (brandFilter === ALL_BRANDS) return results;
     return results.filter((r) => brandById[String(r.affiliate_id ?? r.id ?? '')] === brandFilter);
   }, [results, brandFilter, brandById]);
+
+  // Mapa id → nome (fallback p/ afiliados sem linha em results).
+  const nameById = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const a of affiliates) m[String(a.id ?? a._id ?? '')] = a.name || a.label || '';
+    return m;
+  }, [affiliates]);
+
+  // Rankings de afiliados (comissão da casa = total_commission, visão do master).
+  // Top especiais → por comissão da REDE (própria + subs). Top subs → comissão própria,
+  // com o especial a que pertencem.
+  const { topSpecials, topSubs } = useMemo(() => {
+    const byId: Record<string, any> = {};
+    scopedResults.forEach((r) => { byId[String(r.affiliate_id ?? r.id ?? '')] = r; });
+    const nameOf = (id: string) => humanizeName(byId[id]?.label || byId[id]?.name || nameById[id] || `#${id}`);
+    const comm = (id: string) => Number(byId[id]?.total_commission || 0);
+    const active = Object.values(specials).filter((s) => s.active);
+
+    const topSpecials = active
+      .map((s) => {
+        const ids = [String(s.affiliateId), ...(s.subAffiliateIds || []).map(String)];
+        return {
+          id: String(s.affiliateId),
+          name: nameOf(String(s.affiliateId)),
+          commission: ids.reduce((sum, id) => sum + comm(id), 0),
+          subs: (s.subAffiliateIds || []).length,
+        };
+      })
+      .sort((a, b) => b.commission - a.commission)
+      .slice(0, 5);
+
+    const subToSpecial: Record<string, string> = {};
+    active.forEach((s) => (s.subAffiliateIds || []).forEach((sid) => { subToSpecial[String(sid)] = nameOf(String(s.affiliateId)); }));
+    const topSubs = Object.keys(subToSpecial)
+      .map((sid) => ({ id: sid, name: nameOf(sid), commission: comm(sid), special: subToSpecial[sid] }))
+      .sort((a, b) => b.commission - a.commission)
+      .slice(0, 5);
+
+    return { topSpecials, topSubs };
+  }, [scopedResults, specials, nameById]);
 
   // Totais (financeiro + funil) derivados dos results no escopo da marca.
   const totals = useMemo(() => scopedResults.reduce((acc, curr) => ({
@@ -444,6 +490,67 @@ export default function AdminDashboard() {
               <p className="font-bold text-sm uppercase tracking-widest">Sem dados disponíveis</p>
             </div>
           )}
+        </div>
+      </section>
+
+      {/* Top afiliados especiais + Top afiliados sub — rankings por comissão da casa. */}
+      <section className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Top especiais (por comissão da rede: própria + subs) */}
+        <div className="bg-white dark:bg-neutral-900/60 border border-slate-200/70 dark:border-neutral-800 rounded-3xl shadow-sm overflow-hidden">
+          <div className="p-6 border-b border-slate-100 dark:border-neutral-800 flex items-center gap-3">
+            <span className="shrink-0 p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-500"><Crown size={16} /></span>
+            <div className="min-w-0">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white tracking-tight">Top afiliados especiais</h3>
+              <p className="text-[11px] text-slate-400 dark:text-neutral-500">Por comissão da rede (própria + subs) no período</p>
+            </div>
+          </div>
+          <div className="divide-y divide-slate-50 dark:divide-neutral-800">
+            {loading ? (
+              <div className="flex items-center justify-center py-10"><Loader2 className="animate-spin text-brand dark:text-white" /></div>
+            ) : topSpecials.length === 0 ? (
+              <p className="px-6 py-10 text-center text-xs font-bold text-slate-400 uppercase tracking-widest opacity-60">Nenhum afiliado especial ativo</p>
+            ) : topSpecials.map((s, i) => (
+              <div key={s.id} className="px-6 py-3.5 flex items-center justify-between gap-3 hover:bg-slate-50/60 dark:hover:bg-neutral-800/30 transition-colors">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="shrink-0 w-6 h-6 rounded-lg bg-slate-100 dark:bg-neutral-800 text-slate-500 dark:text-neutral-400 text-[11px] font-black flex items-center justify-center">{i + 1}</span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-slate-800 dark:text-white truncate">{s.name}</p>
+                    <p className="text-[10px] text-slate-400 dark:text-neutral-500">{s.subs} sub-afiliado(s)</p>
+                  </div>
+                </div>
+                <span className="shrink-0 text-sm font-black text-slate-900 dark:text-white tabular-nums">R$ {s.commission.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Top subs (comissão própria, com o especial a que pertencem) */}
+        <div className="bg-white dark:bg-neutral-900/60 border border-slate-200/70 dark:border-neutral-800 rounded-3xl shadow-sm overflow-hidden">
+          <div className="p-6 border-b border-slate-100 dark:border-neutral-800 flex items-center gap-3">
+            <span className="shrink-0 p-2 rounded-xl bg-slate-100 dark:bg-neutral-800 text-slate-500 dark:text-neutral-300"><Users size={16} /></span>
+            <div className="min-w-0">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white tracking-tight">Top afiliados sub</h3>
+              <p className="text-[11px] text-slate-400 dark:text-neutral-500">Por comissão no período, com o especial a que pertencem</p>
+            </div>
+          </div>
+          <div className="divide-y divide-slate-50 dark:divide-neutral-800">
+            {loading ? (
+              <div className="flex items-center justify-center py-10"><Loader2 className="animate-spin text-brand dark:text-white" /></div>
+            ) : topSubs.length === 0 ? (
+              <p className="px-6 py-10 text-center text-xs font-bold text-slate-400 uppercase tracking-widest opacity-60">Nenhum sub-afiliado vinculado</p>
+            ) : topSubs.map((s, i) => (
+              <div key={s.id} className="px-6 py-3.5 flex items-center justify-between gap-3 hover:bg-slate-50/60 dark:hover:bg-neutral-800/30 transition-colors">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="shrink-0 w-6 h-6 rounded-lg bg-slate-100 dark:bg-neutral-800 text-slate-500 dark:text-neutral-400 text-[11px] font-black flex items-center justify-center">{i + 1}</span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-slate-800 dark:text-white truncate">{s.name}</p>
+                    <p className="text-[10px] text-amber-600 dark:text-amber-400 truncate">Pertence a {s.special}</p>
+                  </div>
+                </div>
+                <span className="shrink-0 text-sm font-black text-slate-900 dark:text-white tabular-nums">R$ {s.commission.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
