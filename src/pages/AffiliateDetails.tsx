@@ -642,17 +642,21 @@ export default function AffiliateDetails() {
                   {/* Por Campanha (dados reais da API externa, groupBy=campaign).
                       O afiliado vê a PRÓPRIA comissão (CPA+REV via config), nunca a margem da agência. */}
                   <CampaignBreakdown
+                    title="Top 5 campanhas"
                     commissionLabel="Sua comissão"
-                    subtitle="Resultados por campanha no período selecionado"
-                    infoText="Seu desempenho por campanha. 'Sua comissão' é o repasse a você (CPA + REV) referente a cada campanha no período."
-                    rows={campaignResults.map((c) => ({
-                      name: c.name,
-                      registrations: c.registrations,
-                      firstDeposits: c.first_deposits,
-                      deposit: c.deposit,
-                      qualifiedCpa: c.qualified_cpa,
-                      commission: calcAffiliatePayout(c, config),
-                    }))}
+                    subtitle="As 5 campanhas com maior comissão no período"
+                    infoText="As 5 campanhas com maior comissão sua. 'Sua comissão' é o repasse a você (CPA + REV) referente a cada campanha no período."
+                    rows={campaignResults
+                      .map((c) => ({
+                        name: c.name,
+                        registrations: c.registrations,
+                        firstDeposits: c.first_deposits,
+                        deposit: c.deposit,
+                        qualifiedCpa: c.qualified_cpa,
+                        commission: calcAffiliatePayout(c, config),
+                      }))
+                      .sort((a, b) => b.commission - a.commission)
+                      .slice(0, 5)}
                   />
 
                   {/* Evolução diária (dados reais da API externa, groupBy=date) */}

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Loader2, DollarSign, UserPlus, Wallet, Target, Crown, Save, Percent, HelpCircle, Users } from 'lucide-react';
+import { Loader2, DollarSign, UserPlus, Wallet, Target, Crown, Save, Percent, HelpCircle, Users, BarChart3, TrendingUp } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import {
@@ -120,6 +120,22 @@ export default function SpecialDashboard() {
     return sum + (calcAffiliatePayout(r, ownConfig) - calcAffiliatePayout(r, configs[id]));
   }, 0);
   const earnings = ownPayout + spreadTotal;
+
+  // Comissão total do especial = taxa PRÓPRIA aplicada sobre TODA a rede (própria + subs).
+  // É o que a agência paga ao especial; o lucro líquido = comissão total − repasse aos subs.
+  // Mantém a regra do lucro líquido: tudo à taxa do especial, nunca a comissão bruta da casa.
+  const comissaoTotal = results.reduce((sum, r) => sum + calcAffiliatePayout(r, ownConfig), 0);
+  const cpaPortion = results.reduce((sum, r) => sum + (r.qualified_cpa || 0) * (ownConfig.cpaValue || 0), 0);
+  const revPortion = results.reduce((sum, r) => sum + (r.rvs || 0) * ((ownConfig.revPercentage || 0) / 100), 0);
+  const repasse = comissaoTotal - earnings;
+
+  // Cards de métrica (espelham o /admin, capados à rede do especial).
+  const metrics = [
+    { label: 'Afiliados na rede', value: String(subIds.length), icon: Users },
+    { label: 'Comissão total', value: brl(comissaoTotal), icon: DollarSign },
+    { label: 'Total CPA', value: brl(cpaPortion), icon: BarChart3 },
+    { label: 'Total REV', value: brl(revPortion), icon: TrendingUp },
+  ];
 
   // Série diária: a API agrega own+subs por dia. Substituímos a comissão da CASA
   // (total_commission cru) pela comissão DO ESPECIAL à taxa própria, mantendo a
@@ -281,6 +297,39 @@ export default function SpecialDashboard() {
         <DateRangePicker value={range} onChange={setRange} />
       </header>
 
+      {/* Cards de métrica — espelham o /admin (capados à rede): nº de afiliados,
+          comissão total (taxa própria sobre a rede), CPA e REV. */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        {metrics.map((metric, idx) => (
+          <motion.div
+            key={metric.label}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: idx * 0.05 }}
+            className={cn(
+              'group p-6 rounded-2xl border transition-all relative overflow-hidden',
+              idx === 0
+                ? 'bg-slate-900 dark:bg-neutral-900 text-white border-slate-800 dark:border-neutral-800 shadow-xl shadow-slate-900/10 dark:shadow-black/30'
+                : 'bg-white dark:bg-neutral-900/60 border-slate-200/70 dark:border-neutral-800 shadow-sm hover:border-slate-300 dark:hover:border-neutral-700'
+            )}
+          >
+            {idx === 0 && (
+              <div className="absolute top-0 right-0 w-40 h-40 bg-white/5 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none" />
+            )}
+            <div className="flex justify-between items-start mb-4 relative">
+              <div className={cn(
+                'p-2.5 rounded-xl border transition-transform group-hover:scale-105',
+                idx === 0 ? 'bg-white/5 border-white/10' : 'bg-slate-50 dark:bg-neutral-800/60 border-slate-100 dark:border-neutral-700/60'
+              )}>
+                <metric.icon size={20} className={cn(idx === 0 ? 'text-white' : 'text-slate-900 dark:text-neutral-100')} />
+              </div>
+            </div>
+            <p className={cn('text-[10px] uppercase font-bold tracking-widest mb-1.5', idx === 0 ? 'text-neutral-400' : 'text-slate-400 dark:text-neutral-500')}>{metric.label}</p>
+            <h3 className={cn('text-2xl font-bold tracking-tight truncate', idx === 0 ? 'text-white' : 'text-slate-900 dark:text-white')}>{metric.value}</h3>
+          </motion.div>
+        ))}
+      </div>
+
       {/* Ganho do especial (spread sobre subs + produção própria) */}
       <motion.div
         initial={{ opacity: 0, y: 10 }}
@@ -294,7 +343,7 @@ export default function SpecialDashboard() {
           </span>
           <h3 className="text-3xl md:text-4xl font-bold tracking-tighter text-emerald-700 dark:text-emerald-400">{brl(earnings)}</h3>
           <p className="text-[11px] font-medium text-slate-500 dark:text-neutral-400 mt-2 max-w-2xl">
-            Seu link ({brl(ownPayout)}) + lucro da rede ({brl(spreadTotal)}) — já com os repasses aos sub-afiliados descontados.
+            Comissão total ({brl(comissaoTotal)}) − repasses aos sub-afiliados ({brl(repasse)}). Inclui sua produção própria ({brl(ownPayout)}) + o spread sobre a rede.
           </p>
         </div>
         <div className="relative shrink-0 p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-500">
@@ -346,20 +395,23 @@ export default function SpecialDashboard() {
           taxa própria do especial; a margem da agência continua só no master. */}
       <section>
         <h3 className="text-[10px] uppercase font-bold tracking-widest text-slate-400 dark:text-neutral-500 mb-3 px-1">
-          Por campanha (sua rede)
+          Top 5 campanhas (sua rede)
         </h3>
         <CampaignBreakdown
           commissionLabel="Sua comissão"
-          subtitle="Soma da sua rede (sua produção + sub-afiliados) no período"
-          infoText="Desempenho da sua rede por campanha. 'Sua comissão' é o seu ganho à sua taxa (CPA + REV) sobre toda a rede no período."
-          rows={campaignResults.map((c) => ({
-            name: c.name,
-            registrations: c.registrations,
-            firstDeposits: c.first_deposits,
-            deposit: c.deposit,
-            qualifiedCpa: c.qualified_cpa,
-            commission: calcAffiliatePayout(c, ownConfig),
-          }))}
+          subtitle="Top 5 campanhas da sua rede (sua produção + sub-afiliados) no período"
+          infoText="As 5 campanhas com maior comissão sua na rede. 'Sua comissão' é o seu ganho à sua taxa (CPA + REV) sobre toda a rede no período."
+          rows={campaignResults
+            .map((c) => ({
+              name: c.name,
+              registrations: c.registrations,
+              firstDeposits: c.first_deposits,
+              deposit: c.deposit,
+              qualifiedCpa: c.qualified_cpa,
+              commission: calcAffiliatePayout(c, ownConfig),
+            }))
+            .sort((a, b) => b.commission - a.commission)
+            .slice(0, 5)}
         />
       </section>
 
