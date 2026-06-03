@@ -706,11 +706,11 @@ export default function AffiliateDetails() {
 
       {/* User Registration Modal */}
       {isUserModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <motion.div 
+        <div className="fixed inset-0 z-50 flex justify-center overflow-y-auto p-4 bg-slate-900/60 backdrop-blur-sm">
+          <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-white dark:bg-neutral-900 w-full max-w-md rounded-3xl shadow-2xl border border-slate-100 dark:border-neutral-800 overflow-hidden"
+            className="my-auto bg-white dark:bg-neutral-900 w-full max-w-md rounded-3xl shadow-2xl border border-slate-100 dark:border-neutral-800 overflow-hidden"
           >
             <div className="p-6 border-b border-slate-50 dark:border-neutral-800 flex justify-between items-center">
               <h3 className="font-black text-slate-900 dark:text-white uppercase tracking-widest text-sm">Cadastrar Usuário</h3>
@@ -841,11 +841,11 @@ export default function AffiliateDetails() {
 
       {/* Affiliate Link Modal */}
       {isLinkModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <motion.div 
+        <div className="fixed inset-0 z-50 flex justify-center overflow-y-auto p-4 bg-slate-900/60 backdrop-blur-sm">
+          <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-white dark:bg-neutral-900 w-full max-w-lg rounded-3xl shadow-2xl border border-slate-100 dark:border-neutral-800 overflow-hidden"
+            className="my-auto bg-white dark:bg-neutral-900 w-full max-w-lg rounded-3xl shadow-2xl border border-slate-100 dark:border-neutral-800 overflow-hidden"
           >
             <div className="p-6 border-b border-slate-50 dark:border-neutral-800 flex justify-between items-center">
               <h3 className="font-black text-slate-900 dark:text-white uppercase tracking-widest text-sm">Convite de Acesso Gerado</h3>
@@ -921,13 +921,13 @@ export default function AffiliateDetails() {
           A API não expõe jogadores; "cadastros vinculados" = os afiliados da rede
           do especial com seus números de cadastro/métricas. */}
       {cadastrosOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex justify-center overflow-y-auto p-4 bg-slate-900/60 backdrop-blur-sm">
           <motion.div
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-white dark:bg-neutral-900 w-full max-w-2xl rounded-3xl shadow-2xl border border-slate-100 dark:border-neutral-800 overflow-hidden flex flex-col max-h-[85vh]"
+            className="my-auto bg-white dark:bg-neutral-900 w-full max-w-2xl rounded-3xl shadow-2xl border border-slate-100 dark:border-neutral-800 overflow-hidden flex flex-col max-h-[calc(100vh-2rem)]"
           >
-            <div className="p-6 border-b border-slate-50 dark:border-neutral-800 flex justify-between items-center gap-3">
+            <div className="shrink-0 p-6 border-b border-slate-50 dark:border-neutral-800 flex justify-between items-center gap-3">
               <div className="flex items-center gap-3 min-w-0">
                 <span className="shrink-0 p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-500"><Users size={18} /></span>
                 <div className="min-w-0">
@@ -944,11 +944,11 @@ export default function AffiliateDetails() {
               <div className="flex items-center justify-center py-20"><Loader2 className="w-8 h-8 text-amber-500 animate-spin" /></div>
             ) : (
               <>
-                <div className="px-6 py-4 bg-slate-50/60 dark:bg-neutral-800/30 border-b border-slate-50 dark:border-neutral-800 flex items-center justify-between">
+                <div className="shrink-0 px-6 py-4 bg-slate-50/60 dark:bg-neutral-800/30 border-b border-slate-50 dark:border-neutral-800 flex items-center justify-between">
                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Total de cadastros na rede</span>
                   <span className="text-lg font-black text-slate-900 dark:text-white tabular-nums">{networkTotalReg.toLocaleString('pt-BR')}</span>
                 </div>
-                <div className="overflow-y-auto divide-y divide-slate-50 dark:divide-neutral-800">
+                <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-slate-50 dark:divide-neutral-800">
                   {networkCadastros.map((n) => (
                     <div key={n.id} className="px-6 py-4 flex items-center justify-between gap-4 hover:bg-slate-50/50 dark:hover:bg-neutral-800/30 transition-colors">
                       <div className="flex items-center gap-3 min-w-0">

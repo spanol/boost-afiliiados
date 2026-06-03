@@ -257,11 +257,11 @@ export default function AffiliatesList() {
     <div className="space-y-8 pb-12">
       {/* Confirmation Modal */}
       {confirmModal.open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-50 flex justify-center overflow-y-auto bg-black/50 backdrop-blur-sm p-4">
           <motion.div
             initial={{ opacity: 0, scale: 0.96, y: 8 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
-            className="w-full max-w-md p-6 bg-white dark:bg-neutral-900 rounded-3xl shadow-2xl border border-slate-200/70 dark:border-neutral-800"
+            className="my-auto w-full max-w-md p-6 bg-white dark:bg-neutral-900 rounded-3xl shadow-2xl border border-slate-200/70 dark:border-neutral-800"
           >
             <h3 className="text-lg font-bold tracking-tight text-slate-900 dark:text-white">Confirmar ação</h3>
             <p className="text-sm text-slate-500 dark:text-neutral-400 mt-2">Tem certeza que deseja desativar o afiliado <span className="font-semibold text-slate-700 dark:text-neutral-200">{confirmModal.name}</span>? Isso impedirá o acesso ao sistema.</p>
