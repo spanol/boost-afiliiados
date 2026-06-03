@@ -706,11 +706,16 @@ export default function AffiliateDetails() {
 
       {/* User Registration Modal */}
       {isUserModalOpen && (
-        <div className="fixed inset-0 z-50 flex justify-center overflow-y-auto p-4 bg-slate-900/60 backdrop-blur-sm">
+        <div
+          onClick={() => { setIsUserModalOpen(false); setRegisterSuccess(false); setUserEmail(''); setUserPassword(''); setRegisterError(null); }}
+          className="fixed inset-0 z-50 overflow-y-auto p-4 bg-slate-900/60 backdrop-blur-sm"
+        >
+          <div className="flex min-h-full items-center justify-center">
           <motion.div
+            onClick={(e) => e.stopPropagation()}
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="my-auto bg-white dark:bg-neutral-900 w-full max-w-md rounded-3xl shadow-2xl border border-slate-100 dark:border-neutral-800 overflow-hidden"
+            className="bg-white dark:bg-neutral-900 w-full max-w-md rounded-3xl shadow-2xl border border-slate-100 dark:border-neutral-800 overflow-hidden"
           >
             <div className="p-6 border-b border-slate-50 dark:border-neutral-800 flex justify-between items-center">
               <h3 className="font-black text-slate-900 dark:text-white uppercase tracking-widest text-sm">Cadastrar Usuário</h3>
@@ -836,16 +841,19 @@ export default function AffiliateDetails() {
               </div>
             )}
           </motion.div>
+          </div>
         </div>
       )}
 
       {/* Affiliate Link Modal */}
       {isLinkModalOpen && (
-        <div className="fixed inset-0 z-50 flex justify-center overflow-y-auto p-4 bg-slate-900/60 backdrop-blur-sm">
+        <div onClick={() => setIsLinkModalOpen(false)} className="fixed inset-0 z-50 overflow-y-auto p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="flex min-h-full items-center justify-center">
           <motion.div
+            onClick={(e) => e.stopPropagation()}
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="my-auto bg-white dark:bg-neutral-900 w-full max-w-lg rounded-3xl shadow-2xl border border-slate-100 dark:border-neutral-800 overflow-hidden"
+            className="bg-white dark:bg-neutral-900 w-full max-w-lg rounded-3xl shadow-2xl border border-slate-100 dark:border-neutral-800 overflow-hidden"
           >
             <div className="p-6 border-b border-slate-50 dark:border-neutral-800 flex justify-between items-center">
               <h3 className="font-black text-slate-900 dark:text-white uppercase tracking-widest text-sm">Convite de Acesso Gerado</h3>
@@ -914,6 +922,7 @@ export default function AffiliateDetails() {
               </button>
             </div>
           </motion.div>
+          </div>
         </div>
       )}
 
@@ -921,11 +930,13 @@ export default function AffiliateDetails() {
           A API não expõe jogadores; "cadastros vinculados" = os afiliados da rede
           do especial com seus números de cadastro/métricas. */}
       {cadastrosOpen && (
-        <div className="fixed inset-0 z-50 flex justify-center overflow-y-auto p-4 bg-slate-900/60 backdrop-blur-sm">
+        <div onClick={() => setCadastrosOpen(false)} className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-sm">
+          <div className="flex min-h-full items-center justify-center p-4">
           <motion.div
+            onClick={(e) => e.stopPropagation()}
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="my-auto bg-white dark:bg-neutral-900 w-full max-w-2xl rounded-3xl shadow-2xl border border-slate-100 dark:border-neutral-800 overflow-hidden flex flex-col max-h-[calc(100vh-2rem)]"
+            className="bg-white dark:bg-neutral-900 w-full max-w-2xl rounded-3xl shadow-2xl border border-slate-100 dark:border-neutral-800 overflow-hidden flex flex-col max-h-[calc(100vh-2rem)]"
           >
             <div className="shrink-0 p-6 border-b border-slate-50 dark:border-neutral-800 flex justify-between items-center gap-3">
               <div className="flex items-center gap-3 min-w-0">
@@ -980,6 +991,7 @@ export default function AffiliateDetails() {
               </>
             )}
           </motion.div>
+          </div>
         </div>
       )}
     </div>

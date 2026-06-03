@@ -77,9 +77,10 @@ export default function SpecialAffiliateModal({ affiliate, allAffiliates, specia
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm">
+    <div onClick={onClose} className="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm">
       <div className="flex min-h-full items-center justify-center p-4">
         <motion.div
+          onClick={(e) => e.stopPropagation()}
           initial={{ opacity: 0, scale: 0.96, y: 8 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           className="w-full max-w-lg bg-white dark:bg-neutral-900 rounded-3xl shadow-2xl border border-slate-200/70 dark:border-neutral-800 overflow-hidden flex flex-col max-h-[calc(100vh-2rem)]"
