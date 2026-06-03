@@ -27,8 +27,7 @@ import {
   Wallet,
   Eye,
   EyeOff,
-  Users,
-  ChevronRight
+  Users
 } from 'lucide-react';
 import {
   fetchAffiliateById,
@@ -420,6 +419,14 @@ export default function AffiliateDetails() {
                 {loadingSpecial ? <Loader2 size={16} className="animate-spin" /> : <Crown size={16} />}
                 {isCurrentSpecialActive ? 'Afiliado Especial' : 'Tornar Especial'}
               </button>
+              {isCurrentSpecialActive && (
+                <button
+                  onClick={openCadastros}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 text-slate-700 dark:text-neutral-300 rounded-xl hover:border-amber-500/40 transition-all font-bold text-xs uppercase tracking-wider shadow-sm"
+                >
+                  <Users size={16} /> Afiliados Vinculados
+                </button>
+              )}
             </>
           )}
         </div>
@@ -506,18 +513,11 @@ export default function AffiliateDetails() {
 
                   {/* Primary Performance Metrics */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {/* Stage 1: Registrations */}
+                    {/* Stage 1: Registrations (clientes que se cadastraram para o afiliado) */}
                     <motion.div
                       initial={{ opacity: 0, y: 20 }}
                       whileInView={{ opacity: 1, y: 0 }}
-                      onClick={isAdmin && isCurrentSpecialActive ? openCadastros : undefined}
-                      role={isAdmin && isCurrentSpecialActive ? 'button' : undefined}
-                      tabIndex={isAdmin && isCurrentSpecialActive ? 0 : undefined}
-                      onKeyDown={isAdmin && isCurrentSpecialActive ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openCadastros(); } } : undefined}
-                      className={cn(
-                        "bg-white dark:bg-neutral-900 p-8 rounded-[2.5rem] border border-slate-100 dark:border-neutral-800 shadow-sm group hover:border-brand/20 transition-all duration-500",
-                        isAdmin && isCurrentSpecialActive && "cursor-pointer hover:shadow-md hover:border-amber-300/70 dark:hover:border-amber-800 outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40"
-                      )}
+                      className="bg-white dark:bg-neutral-900 p-8 rounded-[2.5rem] border border-slate-100 dark:border-neutral-800 shadow-sm group hover:border-brand/20 transition-all duration-500"
                     >
                       <div className="flex items-center justify-between mb-4">
                         <div className="p-3 bg-slate-50 dark:bg-neutral-800 rounded-2xl text-slate-400 group-hover:text-brand transition-colors">
@@ -528,13 +528,7 @@ export default function AffiliateDetails() {
                       <div className="space-y-1">
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Cadastros</p>
                         <h4 className="text-4xl font-black text-slate-900 dark:text-white tracking-tighter">{res.registrations || 0}</h4>
-                        {isAdmin && isCurrentSpecialActive ? (
-                          <p className="text-[10px] font-bold uppercase tracking-widest mt-2 inline-flex items-center gap-1 text-amber-600 dark:text-amber-400">
-                            Ver cadastros da rede <ChevronRight size={12} className="transition-transform group-hover:translate-x-0.5" />
-                          </p>
-                        ) : (
-                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2">Leads Qualificados</p>
-                        )}
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2">Clientes cadastrados</p>
                       </div>
                     </motion.div>
 
