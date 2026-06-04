@@ -292,7 +292,7 @@ export default function SpecialDashboard() {
             <span className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20">
               <Crown size={24} className="text-amber-500" />
             </span>
-            Sua rede
+            {humanizeName(profile?.name || '') || 'Sua rede'}
           </h1>
           <p className="text-slate-500 dark:text-neutral-400 text-sm mt-2">{subIds.length} sub-afiliado(s) + sua produção.</p>
         </div>
