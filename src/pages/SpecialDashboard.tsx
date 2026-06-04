@@ -149,6 +149,23 @@ export default function SpecialDashboard() {
     [results, ownConfig]
   );
 
+  // Top 5 afiliados da rede (own + subs) por comissão à TAXA PRÓPRIA do especial —
+  // espelha o "Top afiliados" do /admin, capado à rede (regra do lucro líquido).
+  const topAffiliates = useMemo(
+    () => [...results]
+      .map((r) => ({
+        id: String(r.affiliate_id ?? r.id ?? ''),
+        name: humanizeName(String(r.affiliate_name || r.name || r.label || r.affiliate_id || r.id || '---')),
+        commission: calcAffiliatePayout(r, ownConfig),
+        registrations: r.registrations || 0,
+        qualifiedCpa: r.qualified_cpa || 0,
+        isOwn: String(r.affiliate_id ?? r.id ?? '') === ownId,
+      }))
+      .sort((a, b) => b.commission - a.commission)
+      .slice(0, 5),
+    [results, ownConfig, ownId]
+  );
+
   // Mesma lógica para "Por casa": o BrandBreakdown calcula a comissão a partir do
   // config informado — passamos a taxa própria do especial (o que ele recebe).
 
@@ -262,6 +279,37 @@ export default function SpecialDashboard() {
               <p className="text-[10px] uppercase font-bold tracking-widest mb-1.5 text-slate-400 dark:text-neutral-500">{item.label}</p>
               <h3 className="text-2xl font-bold tracking-tight truncate text-slate-900 dark:text-white">{item.value}</h3>
             </motion.div>
+          ))}
+        </div>
+      </section>
+
+      {/* Top 5 afiliados da rede — ranking por comissão à taxa própria do especial.
+          Espelha o "Top afiliados" do /admin, capado à rede (own + subs). */}
+      <section className="bg-white dark:bg-neutral-900/60 border border-slate-200/70 dark:border-neutral-800 rounded-3xl shadow-sm overflow-hidden">
+        <div className="p-6 border-b border-slate-100 dark:border-neutral-800 flex items-center gap-3">
+          <span className="shrink-0 p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-500"><Crown size={16} /></span>
+          <div className="min-w-0">
+            <h3 className="text-sm font-bold text-slate-900 dark:text-white tracking-tight">Top 5 afiliados da rede</h3>
+            <p className="text-[11px] text-slate-400 dark:text-neutral-500">Você + sub-afiliados, por comissão à sua taxa no período</p>
+          </div>
+        </div>
+        <div className="divide-y divide-slate-50 dark:divide-neutral-800">
+          {topAffiliates.length === 0 || topAffiliates.every((a) => a.commission === 0 && a.registrations === 0) ? (
+            <p className="px-6 py-10 text-center text-xs font-bold text-slate-400 uppercase tracking-widest opacity-60">Nenhuma produção na rede no período</p>
+          ) : topAffiliates.map((a, i) => (
+            <div key={a.id || i} className="px-6 py-3.5 flex items-center justify-between gap-3 hover:bg-slate-50/60 dark:hover:bg-neutral-800/30 transition-colors">
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="shrink-0 w-6 h-6 rounded-lg bg-slate-100 dark:bg-neutral-800 text-slate-500 dark:text-neutral-400 text-[11px] font-black flex items-center justify-center">{i + 1}</span>
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-slate-800 dark:text-white truncate flex items-center gap-1.5">
+                    {a.name}
+                    {a.isOwn && <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 text-[8px] font-black uppercase tracking-wider"><Crown size={9} /> Você</span>}
+                  </p>
+                  <p className="text-[10px] text-slate-400 dark:text-neutral-500">{a.registrations.toLocaleString('pt-BR')} cadastros · {a.qualifiedCpa.toLocaleString('pt-BR')} CPA qualif.</p>
+                </div>
+              </div>
+              <span className="shrink-0 text-sm font-black text-slate-900 dark:text-white tabular-nums">{brl(a.commission)}</span>
+            </div>
           ))}
         </div>
       </section>
