@@ -35,7 +35,7 @@ export default function InfoTooltip({ text, size = 14, align = 'center', classNa
       <span
         role="tooltip"
         className={cn(
-          'pointer-events-none absolute top-full z-30 mt-2 w-56 max-w-[calc(100vw-2rem)] rounded-xl border border-slate-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-3 text-[11px] font-medium normal-case tracking-normal leading-relaxed text-slate-600 dark:text-neutral-300 shadow-xl opacity-0 group-hover/info:opacity-100 group-focus-within/info:opacity-100 transition-opacity',
+          'pointer-events-none absolute top-full z-30 mt-2 w-56 max-w-[calc(100vw_-_2rem)] rounded-xl border border-slate-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-3 text-[11px] font-medium normal-case tracking-normal leading-relaxed text-slate-600 dark:text-neutral-300 shadow-xl opacity-0 group-hover/info:opacity-100 group-focus-within/info:opacity-100 transition-opacity',
           position
         )}
       >

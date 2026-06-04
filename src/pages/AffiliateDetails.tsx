@@ -384,7 +384,7 @@ export default function AffiliateDetails() {
                   </button>
                   <span
                     role="tooltip"
-                    className="pointer-events-none absolute top-full z-30 mt-2 w-64 max-w-[calc(100vw-2rem)] right-0 translate-x-0 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 rounded-xl border border-slate-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-3 text-[11px] font-medium normal-case leading-relaxed text-slate-600 dark:text-neutral-300 shadow-xl opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
+                    className="pointer-events-none absolute top-full z-30 mt-2 w-64 max-w-[calc(100vw_-_2rem)] right-0 translate-x-0 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 rounded-xl border border-slate-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-3 text-[11px] font-medium normal-case leading-relaxed text-slate-600 dark:text-neutral-300 shadow-xl opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity"
                   >
                     <strong className="text-green-600 dark:text-green-400">Cadastrado</strong>: o afiliado já criou o próprio acesso à plataforma.{' '}
                     <strong className="text-yellow-600 dark:text-yellow-400">Pendente</strong>: ainda não se registrou — gere um convite ou cadastre o usuário.
@@ -942,7 +942,7 @@ export default function AffiliateDetails() {
             onClick={(e) => e.stopPropagation()}
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-white dark:bg-neutral-900 w-full max-w-2xl rounded-3xl shadow-2xl border border-slate-100 dark:border-neutral-800 overflow-hidden flex flex-col max-h-[calc(100vh-2rem)]"
+            className="bg-white dark:bg-neutral-900 w-full max-w-2xl rounded-3xl shadow-2xl border border-slate-100 dark:border-neutral-800 overflow-hidden flex flex-col max-h-[calc(100vh_-_2rem)]"
           >
             <div className="shrink-0 p-6 border-b border-slate-50 dark:border-neutral-800 flex justify-between items-center gap-3">
               <div className="flex items-center gap-3 min-w-0">

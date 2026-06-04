@@ -83,7 +83,7 @@ export default function SpecialAffiliateModal({ affiliate, allAffiliates, specia
           onClick={(e) => e.stopPropagation()}
           initial={{ opacity: 0, scale: 0.96, y: 8 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          className="w-full max-w-lg bg-white dark:bg-neutral-900 rounded-3xl shadow-2xl border border-slate-200/70 dark:border-neutral-800 overflow-hidden flex flex-col max-h-[calc(100vh-2rem)]"
+          className="w-full max-w-lg bg-white dark:bg-neutral-900 rounded-3xl shadow-2xl border border-slate-200/70 dark:border-neutral-800 overflow-hidden flex flex-col max-h-[calc(100vh_-_2rem)]"
         >
         <div className="shrink-0 p-6 border-b border-slate-100 dark:border-neutral-800 flex items-start justify-between gap-4">
           <div>

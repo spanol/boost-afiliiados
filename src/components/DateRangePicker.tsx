@@ -72,7 +72,7 @@ export default function DateRangePicker({ value, onChange, className }: DateRang
       </button>
 
       {open && (
-        <div className="absolute left-0 sm:left-auto sm:right-0 z-50 mt-2 w-72 max-w-[calc(100vw-2rem)] bg-white dark:bg-neutral-900 border border-slate-100 dark:border-neutral-800 rounded-2xl shadow-2xl p-3 space-y-1">
+        <div className="absolute left-0 sm:left-auto sm:right-0 z-50 mt-2 w-72 max-w-[calc(100vw_-_2rem)] bg-white dark:bg-neutral-900 border border-slate-100 dark:border-neutral-800 rounded-2xl shadow-2xl p-3 space-y-1">
           {DATE_RANGE_PRESETS.filter((p) => p.id !== 'custom').map((preset) => {
             const isActive = activePreset === preset.id;
             return (
