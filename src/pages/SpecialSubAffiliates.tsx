@@ -1,12 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { motion } from 'motion/react';
-import { Loader2, Users, ArrowUpRight, UserPlus, Wallet, Target, Crown } from 'lucide-react';
+import { Loader2, Users, ArrowUpRight, UserPlus, Wallet, Target, Crown, Save, Percent } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../contexts/ToastContext';
 import {
   fetchSpecialAffiliates,
   fetchAllResults,
   fetchAffiliateConfigs,
+  saveSubAffiliateConfig,
   calcAffiliatePayout,
   SpecialAffiliate,
   AffiliateConfig,
@@ -23,35 +25,49 @@ const brl = (n: number) => `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigi
 // nome (affiliates) e config (affiliate_configs) a signed-in.
 export default function SpecialSubAffiliates() {
   const { profile } = useAuth();
+  const { push } = useToast();
   const navigate = useNavigate();
   const [range, setRange] = useState<DateRange>(() => getDefaultRange());
   const [loading, setLoading] = useState(true);
   const [special, setSpecial] = useState<SpecialAffiliate | null>(null);
   const [results, setResults] = useState<any[]>([]);
   const [configs, setConfigs] = useState<Record<string, AffiliateConfig>>({});
+  // Edição da comissão de cada sub (CPA/REV), com teto = taxa própria do especial.
+  const [subEdits, setSubEdits] = useState<Record<string, { cpaValue: number | string; revPercentage: number | string }>>({});
+  const [savingSub, setSavingSub] = useState<string | null>(null);
 
   const ownId = profile?.affiliateId ? String(profile.affiliateId) : '';
 
-  useEffect(() => {
+  const load = async () => {
     if (!ownId) return;
-    (async () => {
-      try {
-        setLoading(true);
-        const [specials, rows, cfgs] = await Promise.all([
-          fetchSpecialAffiliates(),
-          fetchAllResults(range),
-          fetchAffiliateConfigs(),
-        ]);
-        setSpecial(specials[ownId] || null);
-        setResults(Array.isArray(rows) ? rows : []);
-        setConfigs(cfgs);
-      } catch (e) {
-        console.error('Erro ao carregar sub-afiliados:', e);
-        setResults([]);
-      } finally {
-        setLoading(false);
-      }
-    })();
+    try {
+      setLoading(true);
+      const [specials, rows, cfgs] = await Promise.all([
+        fetchSpecialAffiliates(),
+        fetchAllResults(range),
+        fetchAffiliateConfigs(),
+      ]);
+      const mine = specials[ownId] || null;
+      setSpecial(mine);
+      setResults(Array.isArray(rows) ? rows : []);
+      setConfigs(cfgs);
+      // semente dos inputs editáveis a partir dos configs salvos
+      const seed: Record<string, { cpaValue: number | string; revPercentage: number | string }> = {};
+      (mine?.subAffiliateIds || []).forEach((id) => {
+        const c = cfgs[String(id)];
+        seed[String(id)] = { cpaValue: c?.cpaValue ?? 0, revPercentage: c?.revPercentage ?? 0 };
+      });
+      setSubEdits(seed);
+    } catch (e) {
+      console.error('Erro ao carregar sub-afiliados:', e);
+      setResults([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (ownId) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ownId, range.startDate, range.endDate]);
 
@@ -63,6 +79,27 @@ export default function SpecialSubAffiliates() {
 
   const rowById = (id: string) => results.find((r) => String(r.affiliate_id ?? r.id ?? '') === String(id));
   const subIds = special?.subAffiliateIds?.map(String) || [];
+
+  // Teto = taxa própria do especial: a comissão do sub não passa dela (spread ≥ 0).
+  const handleSubChange = (id: string, field: 'cpaValue' | 'revPercentage', value: string) => {
+    const teto = field === 'cpaValue' ? (ownConfig.cpaValue || 0) : (ownConfig.revPercentage || 0);
+    const next = value === '' ? '' : Math.min(teto, Math.max(0, parseFloat(value) || 0));
+    setSubEdits((prev) => ({ ...prev, [id]: { ...(prev[id] || { cpaValue: 0, revPercentage: 0 }), [field]: next } }));
+  };
+
+  const handleSaveSub = async (id: string) => {
+    const edit = subEdits[id] || { cpaValue: 0, revPercentage: 0 };
+    setSavingSub(id);
+    try {
+      await saveSubAffiliateConfig(id, Number(edit.cpaValue) || 0, Number(edit.revPercentage) || 0);
+      push({ type: 'success', message: 'Comissão do sub-afiliado atualizada.' });
+      await load();
+    } catch (err) {
+      push({ type: 'error', message: err instanceof Error ? err.message : 'Falha ao salvar comissão.' });
+    } finally {
+      setSavingSub(null);
+    }
+  };
 
   if (profile && !profile.isSpecial) return <Navigate to="/dashboard" replace />;
 
@@ -89,7 +126,7 @@ export default function SpecialSubAffiliates() {
             </span>
             Meus afiliados
           </h1>
-          <p className="text-slate-500 dark:text-neutral-400 text-sm mt-2">{subIds.length} sub-afiliado(s) vinculado(s). Clique para ver os dados de cada um.</p>
+          <p className="text-slate-500 dark:text-neutral-400 text-sm mt-2">{subIds.length} sub-afiliado(s) vinculado(s). Defina a comissão de cada um e abra os dados individuais.</p>
         </div>
         <DateRangePicker value={range} onChange={setRange} />
       </header>
@@ -120,20 +157,20 @@ export default function SpecialSubAffiliates() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: idx * 0.05 }}
-                onClick={() => navigate(`/affiliates/${id}`)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/affiliates/${id}`); } }}
-                className="group relative overflow-hidden p-6 rounded-2xl border bg-white dark:bg-neutral-900/60 border-slate-200/70 dark:border-neutral-800 shadow-sm hover:border-amber-300/70 dark:hover:border-amber-800 hover:shadow-md transition-all cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40"
+                className="group relative overflow-hidden p-6 rounded-2xl border bg-white dark:bg-neutral-900/60 border-slate-200/70 dark:border-neutral-800 shadow-sm hover:border-slate-300 dark:hover:border-neutral-700 transition-all"
               >
                 <div className="flex items-center justify-between mb-4">
                   <div className="min-w-0">
                     <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{name}</p>
                     <p className="text-[10px] font-mono uppercase tracking-widest text-slate-400 dark:text-neutral-500 mt-0.5 truncate">Sub #{id}</p>
                   </div>
-                  <span className="shrink-0 p-2 rounded-xl border bg-slate-50 dark:bg-neutral-800/60 border-slate-100 dark:border-neutral-700/60 text-slate-400 dark:text-neutral-500 group-hover:text-amber-500 group-hover:border-amber-500/30 transition-colors">
+                  <button
+                    onClick={() => navigate(`/affiliates/${id}`)}
+                    title="Ver dados do afiliado"
+                    className="shrink-0 p-2 rounded-xl border bg-slate-50 dark:bg-neutral-800/60 border-slate-100 dark:border-neutral-700/60 text-slate-400 dark:text-neutral-500 hover:text-amber-500 hover:border-amber-500/30 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-amber-500/40"
+                  >
                     <ArrowUpRight size={16} />
-                  </span>
+                  </button>
                 </div>
                 <div className="grid grid-cols-3 gap-3 mb-4">
                   {stats.map((s) => (
@@ -143,11 +180,44 @@ export default function SpecialSubAffiliates() {
                     </div>
                   ))}
                 </div>
-                <div className="pt-4 border-t border-slate-100 dark:border-neutral-800 flex items-center justify-between">
+                <div className="flex items-center justify-between mb-3">
                   <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-emerald-600 dark:text-emerald-400">
                     <Crown size={11} /> Seu ganho
                   </span>
                   <span className="text-sm font-black text-emerald-700 dark:text-emerald-400 tabular-nums">{brl(spread)}</span>
+                </div>
+                {/* Edição da comissão do sub (teto = taxa própria do especial). */}
+                <div className="pt-4 border-t border-slate-100 dark:border-neutral-800">
+                  <p className="text-[10px] font-bold text-slate-400 dark:text-neutral-500 uppercase tracking-widest mb-2">
+                    Comissão do sub <span className="normal-case font-medium">(teto: R$ {ownConfig.cpaValue}/CPA · {ownConfig.revPercentage}% REV)</span>
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <div className="relative flex-1">
+                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[10px] font-black text-slate-400 dark:text-neutral-500">R$</span>
+                      <input
+                        type="number" min="0" max={ownConfig.cpaValue || 0} step="0.01"
+                        value={subEdits[id]?.cpaValue ?? 0}
+                        onChange={(e) => handleSubChange(id, 'cpaValue', e.target.value)}
+                        className="w-full pl-7 pr-2 py-2 bg-slate-50 dark:bg-neutral-800/60 border border-slate-200 dark:border-neutral-700 rounded-lg text-[11px] font-bold outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all dark:text-white"
+                      />
+                    </div>
+                    <div className="relative flex-1">
+                      <Percent size={11} className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-300 dark:text-neutral-500" />
+                      <input
+                        type="number" min="0" max={ownConfig.revPercentage || 0} step="0.1"
+                        value={subEdits[id]?.revPercentage ?? 0}
+                        onChange={(e) => handleSubChange(id, 'revPercentage', e.target.value)}
+                        className="w-full pl-6 pr-2 py-2 bg-slate-50 dark:bg-neutral-800/60 border border-slate-200 dark:border-neutral-700 rounded-lg text-[11px] font-bold outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all dark:text-white"
+                      />
+                    </div>
+                    <button
+                      onClick={() => handleSaveSub(id)}
+                      disabled={savingSub === id}
+                      className="p-2 rounded-lg bg-amber-50 text-amber-600 hover:bg-amber-500 hover:text-white dark:bg-amber-900/10 dark:text-amber-400 dark:hover:bg-amber-500 dark:hover:text-white transition-all disabled:opacity-50"
+                    >
+                      {savingSub === id ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                    </button>
+                  </div>
                 </div>
               </motion.div>
             );
