@@ -140,11 +140,17 @@ export default function Profile() {
           <div className="bg-white dark:bg-neutral-900/60 p-6 rounded-3xl border border-slate-200/70 dark:border-neutral-800 shadow-sm flex flex-col items-center h-fit hover:border-slate-300 dark:hover:border-neutral-700 transition-colors">
             <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-neutral-500 mb-6 w-full text-center">Foto de Perfil</h3>
             <div className="relative group mb-6">
-              <img
-                src={avatarUrl}
-                alt="Avatar"
-                className="w-28 h-28 rounded-full object-cover bg-slate-50 dark:bg-neutral-800 border-4 border-white dark:border-neutral-800 shadow-lg"
-              />
+              {avatarUrl ? (
+                <img
+                  src={avatarUrl}
+                  alt="Avatar"
+                  className="w-28 h-28 rounded-full object-cover bg-slate-50 dark:bg-neutral-800 border-4 border-white dark:border-neutral-800 shadow-lg"
+                />
+              ) : (
+                <div className="w-28 h-28 rounded-full flex items-center justify-center bg-slate-100 dark:bg-neutral-800 border-4 border-white dark:border-neutral-800 shadow-lg text-3xl font-black text-slate-400 dark:text-neutral-500">
+                  {(profile?.name || '?').charAt(0).toUpperCase()}
+                </div>
+              )}
               {uploading && (
                 <div className="absolute inset-0 bg-white/60 dark:bg-neutral-900/60 rounded-full flex items-center justify-center backdrop-blur-[1px]">
                   <Loader2 className="text-amber-500 animate-spin" size={24} />

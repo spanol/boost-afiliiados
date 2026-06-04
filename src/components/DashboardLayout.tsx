@@ -120,11 +120,17 @@ export default function DashboardLayout() {
       <div className="mt-auto border-t border-slate-100 dark:border-neutral-800/80 p-4">
         <div className="flex items-center gap-3 p-2.5 bg-slate-50 dark:bg-white/5 rounded-xl border border-slate-100 dark:border-neutral-800 mb-4">
           <div className="relative">
-            <img
-              src={profile?.avatarUrl}
-              alt={profile?.name}
-              className="w-9 h-9 rounded-full object-cover bg-slate-200 border border-white dark:border-neutral-700 shadow-sm"
-            />
+            {profile?.avatarUrl ? (
+              <img
+                src={profile.avatarUrl}
+                alt={profile.name}
+                className="w-9 h-9 rounded-full object-cover bg-slate-200 border border-white dark:border-neutral-700 shadow-sm"
+              />
+            ) : (
+              <div className="w-9 h-9 rounded-full flex items-center justify-center bg-slate-200 dark:bg-neutral-700 border border-white dark:border-neutral-700 shadow-sm text-xs font-black text-slate-600 dark:text-neutral-200">
+                {(profile?.name || '?').charAt(0).toUpperCase()}
+              </div>
+            )}
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-bold text-slate-900 dark:text-white truncate">{profile?.name}</p>
