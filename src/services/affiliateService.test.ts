@@ -13,6 +13,9 @@ import {
   aggregateByCampaign,
   buildSubToSpecialConfig,
   calcAgencyNetProfit,
+  resolveBrandRates,
+  calcAffiliatePayout,
+  calcNetProfit,
 } from './affiliateService';
 
 describe('extractArray', () => {
@@ -176,6 +179,72 @@ describe('buildSubToSpecialConfig', () => {
   it('ignora especial sem config de taxa', () => {
     const map = buildSubToSpecialConfig(specials, { sp2: configs.sp2 } as any);
     expect(map.subA).toBeUndefined();
+  });
+});
+
+describe('resolveBrandRates (B6 · comissão por casa)', () => {
+  const config = {
+    affiliateId: 'a1',
+    cpaValue: 100,
+    revPercentage: 10,
+    byBrand: {
+      sportingbet: { cpaValue: 200, revPercentage: 25 },
+    },
+  } as any;
+
+  it('sem brandId devolve o default de topo (retrocompat)', () => {
+    expect(resolveBrandRates(config)).toEqual({ cpaValue: 100, revPercentage: 10 });
+  });
+
+  it('com brandId conhecido devolve o override da casa', () => {
+    expect(resolveBrandRates(config, 'sportingbet')).toEqual({ cpaValue: 200, revPercentage: 25 });
+  });
+
+  it('com brandId sem override cai no default de topo', () => {
+    expect(resolveBrandRates(config, 'superbet')).toEqual({ cpaValue: 100, revPercentage: 10 });
+  });
+
+  it('config sem byBrand sempre devolve o default', () => {
+    const legacy = { affiliateId: 'a2', cpaValue: 50, revPercentage: 5 } as any;
+    expect(resolveBrandRates(legacy, 'sportingbet')).toEqual({ cpaValue: 50, revPercentage: 5 });
+  });
+
+  it('campo de override inválido cai no default daquele campo', () => {
+    const partial = { affiliateId: 'a3', cpaValue: 80, revPercentage: 8, byBrand: { x: { cpaValue: 'oops', revPercentage: 30 } } } as any;
+    expect(resolveBrandRates(partial, 'x')).toEqual({ cpaValue: 80, revPercentage: 30 });
+  });
+
+  it('config null/undefined devolve zeros', () => {
+    expect(resolveBrandRates(null)).toEqual({ cpaValue: 0, revPercentage: 0 });
+    expect(resolveBrandRates(undefined, 'x')).toEqual({ cpaValue: 0, revPercentage: 0 });
+  });
+});
+
+describe('calcAffiliatePayout / calcNetProfit por casa (B6)', () => {
+  const config = {
+    affiliateId: 'a1',
+    cpaValue: 100,
+    revPercentage: 10,
+    byBrand: { sportingbet: { cpaValue: 200, revPercentage: 50 } },
+  } as any;
+  // 2 CPA qualificados + R$1000 de RVS.
+  const result = { qualified_cpa: 2, rvs: 1000, total_commission: 900 };
+
+  it('payout sem brandId usa o default (2×100 + 1000×10%)', () => {
+    expect(calcAffiliatePayout(result, config)).toBe(2 * 100 + 1000 * 0.1); // 300
+  });
+
+  it('payout com brandId usa o override da casa (2×200 + 1000×50%)', () => {
+    expect(calcAffiliatePayout(result, config, 'sportingbet')).toBe(2 * 200 + 1000 * 0.5); // 900
+  });
+
+  it('payout em casa sem override cai no default', () => {
+    expect(calcAffiliatePayout(result, config, 'superbet')).toBe(300);
+  });
+
+  it('netProfit desconta o repasse da casa correta', () => {
+    expect(calcNetProfit(result, config)).toBe(900 - 300);                 // default
+    expect(calcNetProfit(result, config, 'sportingbet')).toBe(900 - 900);  // override
   });
 });
 

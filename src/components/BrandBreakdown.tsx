@@ -1,6 +1,6 @@
 import React from 'react';
 import { Store } from 'lucide-react';
-import type { AffiliateConfig } from '../services/affiliateService';
+import { resolveBrandRates, type AffiliateConfig } from '../services/affiliateService';
 import InfoTooltip from './InfoTooltip';
 
 interface BrandBreakdownProps {
@@ -15,10 +15,13 @@ const formatBRL = (value: number) =>
 // `groupBy=brand` results and the affiliate's CPA/REV config. Bar widths are
 // proportional to the largest value across houses.
 export default function BrandBreakdown({ data, config }: BrandBreakdownProps) {
+  // B6 · cada casa usa a taxa POR CASA do afiliado (override de byBrand, com
+  // fallback no default). A linha de marca traz o brandId em `id`.
   const brands = (Array.isArray(data) ? data : []).map((row: any) => {
     const name = String(row.label || row.name || row.id || 'Casa');
-    const rev = (Number(row.rvs) || 0) * ((config?.revPercentage || 0) / 100);
-    const cpa = (Number(row.qualified_cpa) || 0) * (config?.cpaValue || 0);
+    const { cpaValue, revPercentage } = resolveBrandRates(config, String(row.id ?? ''));
+    const rev = (Number(row.rvs) || 0) * (revPercentage / 100);
+    const cpa = (Number(row.qualified_cpa) || 0) * cpaValue;
     return { name, rev, cpa };
   });
 

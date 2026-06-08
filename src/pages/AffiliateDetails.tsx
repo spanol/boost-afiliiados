@@ -53,6 +53,7 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import SpecialAffiliateModal from '../components/SpecialAffiliateModal';
 import BrandBreakdown from '../components/BrandBreakdown';
+import BrandConfigEditor from '../components/BrandConfigEditor';
 import CampaignBreakdown from '../components/CampaignBreakdown';
 import DailyPerformanceChart from '../components/DailyPerformanceChart';
 import DateRangePicker from '../components/DateRangePicker';
@@ -694,6 +695,16 @@ export default function AffiliateDetails() {
 
                   {/* Per-house breakdown (real data from groupBy=brand) */}
                   <BrandBreakdown data={brandResults} config={config} />
+
+                  {/* B6 · editor de comissão por casa — admin, dev-gated (≥2 casas). */}
+                  {isAdmin && id && (
+                    <BrandConfigEditor
+                      affiliateId={id}
+                      brandRows={brandResults}
+                      config={config}
+                      onSaved={() => loadDetails(id)}
+                    />
+                  )}
 
                   {/* B4 · Dados de pagamento do afiliado — admin visualiza (mascarado). */}
                   {isAdmin && (

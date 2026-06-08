@@ -10,6 +10,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { authFetch } from '../lib/api';
+import { withMockAffiliates, withMockResults, withMockBrandRows, withMockAffiliateBrandRows } from '../lib/mockMultiHouse';
 import { getDefaultRange } from '../lib/dateRange';
 
 interface Affiliate {
@@ -24,11 +25,42 @@ interface Affiliate {
   createdAt: string;
 }
 
-export interface AffiliateConfig {
-  affiliateId: string;
+// B6 · comissão por casa. Par de taxas (CPA em R$, REV em %) — o mesmo shape do
+// nível de topo da config, mas por marca.
+export interface BrandRates {
   cpaValue: number;
   revPercentage: number;
+}
+
+export interface AffiliateConfig {
+  affiliateId: string;
+  // Taxas de TOPO = o default do afiliado (casa única / fallback). Retrocompat
+  // total: configs antigas só têm estes campos e seguem funcionando.
+  cpaValue: number;
+  revPercentage: number;
+  // B6 · override de comissão POR CASA (afiliado × casa). Chaveado por brandId.
+  // Quando uma casa não tem override aqui, usa o CPA/REV de topo. Dev-gated na UI:
+  // o editor por casa só aparece quando há ≥2 casas (hoje, com a mock multi-casa).
+  byBrand?: Record<string, BrandRates>;
   updatedAt?: any;
+}
+
+// Resolve as taxas efetivas de um afiliado para uma casa: usa o override de
+// `byBrand[brandId]` quando existe, senão cai no CPA/REV de topo (o default).
+// Sem `brandId` (ou sem `byBrand`) devolve o default — é o caminho retrocompat
+// usado por todos os call-sites antigos que não conhecem casa.
+export function resolveBrandRates(config?: AffiliateConfig | null, brandId?: string): BrandRates {
+  const fallback: BrandRates = {
+    cpaValue: Number(config?.cpaValue) || 0,
+    revPercentage: Number(config?.revPercentage) || 0,
+  };
+  if (!brandId || !config?.byBrand) return fallback;
+  const o = config.byBrand[brandId];
+  if (!o) return fallback;
+  return {
+    cpaValue: Number.isFinite(Number(o.cpaValue)) ? Number(o.cpaValue) : fallback.cpaValue,
+    revPercentage: Number.isFinite(Number(o.revPercentage)) ? Number(o.revPercentage) : fallback.revPercentage,
+  };
 }
 
 export interface AffiliateStatusConfig {
@@ -74,12 +106,32 @@ export async function fetchAffiliateConfigs(): Promise<Record<string, AffiliateC
 export async function saveAffiliateConfig(config: AffiliateConfig): Promise<void> {
   try {
     const docRef = doc(db, 'affiliate_configs', config.affiliateId);
+    // merge:true → preserva `byBrand` (overrides por casa) quando o editor de taxa
+    // de topo salva só cpaValue/revPercentage. [[B6]]
     await setDoc(docRef, {
       ...config,
       updatedAt: serverTimestamp()
-    });
+    }, { merge: true });
   } catch (error) {
     console.error('Error saving affiliate config:', error);
+    throw error;
+  }
+}
+
+// B6 · salva apenas os overrides por casa de um afiliado (admin — affiliate_configs
+// é admin-only nas rules). merge:true preserva as taxas de topo. Envie o mapa
+// COMPLETO de casas que devem ter override; remover um override = reescrever o
+// mapa sem aquela chave + recarregar (no MVP dev o editor sempre manda todas as
+// casas presentes, então não há fluxo de remoção parcial).
+export async function saveAffiliateBrandRates(
+  affiliateId: string,
+  byBrand: Record<string, BrandRates>
+): Promise<void> {
+  try {
+    const docRef = doc(db, 'affiliate_configs', affiliateId);
+    await setDoc(docRef, { affiliateId, byBrand, updatedAt: serverTimestamp() }, { merge: true });
+  } catch (error) {
+    console.error('Error saving affiliate brand rates:', error);
     throw error;
   }
 }
@@ -250,7 +302,7 @@ export async function fetchAffiliates(): Promise<Affiliate[]> {
       throw new Error(apiError.message);
     }
 
-    return extractArray(data);
+    return withMockAffiliates(extractArray(data));
   } catch (error) {
     console.error('Affiliate fetch error:', error);
     throw error;
@@ -323,7 +375,9 @@ export interface DateRangeOpts {
 // Per-house (brand) breakdown for an affiliate.
 export async function fetchAffiliateResultsByBrand(id: string, opts: DateRangeOpts = {}): Promise<any[]> {
   try {
-    return await fetchResultsGrouped('brand', { affiliateIds: id, ...opts });
+    // B6/dev · injeta uma 2ª casa (SportingBet) no breakdown quando a mock multi-casa
+    // está ligada, pra a UI por casa acender mesmo sem a casa real na API.
+    return withMockAffiliateBrandRows(await fetchResultsGrouped('brand', { affiliateIds: id, ...opts }), id);
   } catch (error) {
     console.error(`Error fetching brand results for affiliate ${id}:`, error);
     return [];
@@ -352,7 +406,7 @@ export async function fetchAffiliateResults(id: string, opts: DateRangeOpts = {}
 
 export async function fetchAllResults(opts: DateRangeOpts = {}): Promise<any[]> {
   try {
-    return await fetchResultsGrouped('affiliate', opts);
+    return withMockResults(await fetchResultsGrouped('affiliate', opts));
   } catch (error) {
     console.error('Error fetching all results:', error);
     throw error;
@@ -378,7 +432,7 @@ export async function fetchResultsForAffiliates(ids: string[], opts: DateRangeOp
 // Admin → rede inteira; afiliado especial → o proxy escopa à sub-rede (own + subs).
 export async function fetchAllResultsByBrand(opts: DateRangeOpts = {}): Promise<any[]> {
   try {
-    return await fetchResultsGrouped('brand', opts);
+    return withMockBrandRows(await fetchResultsGrouped('brand', opts));
   } catch (error) {
     console.error('Error fetching network brand results:', error);
     return [];
@@ -491,16 +545,20 @@ export async function fetchAllResultsByCampaign(opts: DateRangeOpts = {}, affili
 
 // Repasse devido ao afiliado para um result (mesmo cálculo exibido nos dashboards):
 // CPA qualificado × valor de CPA + REV × (percentual / 100).
-export function calcAffiliatePayout(result: any, config?: AffiliateConfig | null): number {
-  const cpa = (result?.qualified_cpa || 0) * (config?.cpaValue || 0);
-  const rev = (result?.rvs || 0) * ((config?.revPercentage || 0) / 100);
+// B6 · `brandId` opcional: quando informado, usa a taxa POR CASA do afiliado
+// (override de `byBrand`, com fallback no default). Sem ele, usa o default —
+// caminho retrocompat de todo call-site que não conhece casa (groupBy=affiliate).
+export function calcAffiliatePayout(result: any, config?: AffiliateConfig | null, brandId?: string): number {
+  const { cpaValue, revPercentage } = resolveBrandRates(config, brandId);
+  const cpa = (result?.qualified_cpa || 0) * cpaValue;
+  const rev = (result?.rvs || 0) * (revPercentage / 100);
   return cpa + rev;
 }
 
 // Lucro líquido da agência para um result: comissão da casa − repasse ao afiliado.
-export function calcNetProfit(result: any, config?: AffiliateConfig | null): number {
+export function calcNetProfit(result: any, config?: AffiliateConfig | null, brandId?: string): number {
   const houseCommission = result?.total_commission || 0;
-  return houseCommission - calcAffiliatePayout(result, config);
+  return houseCommission - calcAffiliatePayout(result, config, brandId);
 }
 
 // Mapa subId → config do ESPECIAL-pai. Regra de negócio (Carlos, 2026-06-04): a
