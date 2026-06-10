@@ -194,7 +194,7 @@ export default function Home() {
             <div className="rounded-2xl md:rounded-[2rem] border border-neutral-800/60 bg-neutral-900/50 p-2 md:p-3 backdrop-blur-xl shadow-2xl relative overflow-hidden glow-white">
               <div className="rounded-xl overflow-hidden border border-neutral-700/50 bg-neutral-950">
                 <img
-                  src={asset('boost-home/dashboard-escuro.png')}
+                  src={asset('boost-home/dashboard-escuro.jpeg')}
                   alt="Plataforma Boost"
                   className="w-full h-auto block"
                 />
