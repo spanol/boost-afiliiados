@@ -21,7 +21,7 @@ import AffiliatePerformanceChart from '../components/AffiliatePerformanceChart';
 import BrandFilter from '../components/BrandFilter';
 import BrandLogo from '../components/BrandLogo';
 import { getBrandName, uniqueBrands, ALL_BRANDS } from '../lib/brand';
-import { withKnownBrandNames } from '../lib/mockMultiHouse';
+import { withKnownBrandNames } from '../lib/knownHouses';
 import { DateRange, getDefaultRange } from '../lib/dateRange';
 
 export default function AdminDashboard() {

@@ -10,7 +10,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { authFetch } from '../lib/api';
-import { withKnownHouses } from '../lib/mockMultiHouse';
+import { withKnownHouses } from '../lib/knownHouses';
 import { getDefaultRange } from '../lib/dateRange';
 
 interface Affiliate {

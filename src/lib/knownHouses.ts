@@ -1,24 +1,10 @@
-// DEV-ONLY · preview multi-casa. A OTG já LISTA a SportingBet pra agência, mas a
-// casa está "acesa e VAZIA" (0 afiliados / 0 dados) e a nossa x-api-key ainda só
-// traz Superbet (ver [[boost-external-api-state]]). Para validar a UI multi-casa
-// seguindo o MESMO modelo do portal — casa LISTADA mesmo sem dados —, este módulo,
-// quando ligado, faz a SportingBet (e qualquer KNOWN_BRANDS) aparecer VAZIA nas
-// visões por casa, sem inventar produção falsa.
-//   liga com  localStorage.setItem('mockMultiHouse','1')  e recarrega,
-//   ou com a env  VITE_MOCK_MULTIHOUSE=1.
-// Sem o flag, tudo é no-op (produção intacta: só as casas reais da API).
+// Casas conhecidas SEMPRE listadas (modelo do portal OTG): a casa aparece
+// "acesa e VAZIA" (0 dados) mesmo quando a API não traz produção dela. A OTG já
+// LISTA a SportingBet pra agência sem dados, e replicamos isso — a x-api-key
+// ainda só traz Superbet com produção (ver [[boost-external-api-state]]).
+// Importante: aqui só ZERAMOS casas faltantes; nunca inventamos produção falsa —
+// as casas reais da API entram com seus números, as demais entram zeradas.
 import { KNOWN_BRANDS } from './brand';
-
-export function mockMultiHouseEnabled(): boolean {
-  try {
-    if (typeof localStorage !== 'undefined' && localStorage.getItem('mockMultiHouse') === '1') return true;
-  } catch { /* ignore */ }
-  try {
-    return (import.meta as any)?.env?.VITE_MOCK_MULTIHOUSE === '1';
-  } catch {
-    return false;
-  }
-}
 
 // Linha de marca ZERADA (casa vazia) no shape do groupBy=brand da API.
 const emptyBrandRow = (b: { id?: string; name: string }) => ({
@@ -35,9 +21,8 @@ const emptyBrandRow = (b: { id?: string; name: string }) => ({
 
 // Garante que toda casa conhecida apareça nas linhas por casa, VAZIA quando a API
 // não trouxe dados dela (modelo do portal OTG). Usado tanto na visão da rede
-// (admin) quanto no breakdown por afiliado. No-op sem o flag.
+// (admin) quanto no breakdown por afiliado.
 export function withKnownHouses<T>(real: T[]): T[] {
-  if (!mockMultiHouseEnabled()) return real;
   const rows = Array.isArray(real) ? [...real] : [];
   const presentIds = new Set(rows.map((r: any) => String(r?.id ?? '').toLowerCase()));
   const presentNames = new Set(rows.map((r: any) => String(r?.label ?? r?.name ?? '').toLowerCase()));
@@ -50,9 +35,8 @@ export function withKnownHouses<T>(real: T[]): T[] {
 }
 
 // Inclui as casas conhecidas no filtro de marca (dropdown) mesmo sem afiliados na
-// casa — espelha o portal, que lista a casa vazia. No-op sem o flag.
+// casa — espelha o portal, que lista a casa vazia.
 export function withKnownBrandNames(realNames: string[]): string[] {
-  if (!mockMultiHouseEnabled()) return realNames;
   const set = new Set(realNames);
   for (const b of KNOWN_BRANDS) set.add(b.name);
   return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'));
