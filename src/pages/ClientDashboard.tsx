@@ -17,13 +17,16 @@ import {
   fetchAffiliateResultsByBrand,
   fetchAffiliateDailyResults,
   fetchAffiliates,
+  resolveBrandRates,
 } from '../services/affiliateService';
 import BrandBreakdown from '../components/BrandBreakdown';
+import BrandFilter from '../components/BrandFilter';
 import DailyPerformanceChart from '../components/DailyPerformanceChart';
 import DateRangePicker from '../components/DateRangePicker';
 import InfoTooltip from '../components/InfoTooltip';
 import TrendBadge from '../components/TrendBadge';
 import { DateRange, getDefaultRange, getPreviousRange, percentChange } from '../lib/dateRange';
+import { ALL_BRANDS, getKnownBrandName } from '../lib/brand';
 import { cn } from '../lib/utils';
 
 export default function ClientDashboard() {
@@ -37,6 +40,8 @@ export default function ClientDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [range, setRange] = useState<DateRange>(() => getDefaultRange());
+  // Filtro por casa (client-side a partir do groupBy=brand já buscado).
+  const [selectedBrand, setSelectedBrand] = useState<string>(ALL_BRANDS);
 
   useEffect(() => {
     if (profile?.affiliateId || profile?.email) {
@@ -147,6 +152,14 @@ export default function ClientDashboard() {
   const clientRows: Array<{ name: string; firstDeposit: string; createdAt: string }> = [];
   const resultsToRender = results.length > 0 ? results : [emptyResult];
 
+  // Casas disponíveis (nome canônico) a partir das linhas por casa já buscadas —
+  // inclui as casas conhecidas vazias (withKnownHouses). O dropdown some com <2.
+  const brandNameOf = (r: any) =>
+    getKnownBrandName(String(r?.id ?? ''), String(r?.label || r?.name || '')) ?? String(r?.label || r?.name || 'Casa');
+  const availableBrands = Array.from(new Set(brandResults.map(brandNameOf))).filter(Boolean);
+  const isAllBrands = selectedBrand === ALL_BRANDS;
+  const selectedBrandRow = isAllBrands ? null : brandResults.find((r) => brandNameOf(r) === selectedBrand);
+
   return (
     <div className="space-y-8 pb-20">
       <header className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
@@ -173,14 +186,23 @@ export default function ClientDashboard() {
             ID Externo: #{affiliate.id}
           </p>
         </div>
-        <DateRangePicker value={range} onChange={setRange} />
+        <div className="flex flex-col items-start md:items-end gap-3">
+          <DateRangePicker value={range} onChange={setRange} />
+          <BrandFilter brands={availableBrands} value={selectedBrand} onChange={setSelectedBrand} />
+        </div>
       </header>
 
       <div className="grid grid-cols-1 gap-8">
         <div className="space-y-8">
           {resultsToRender.map((res: any, idx: number) => {
-            const calculatedCpa = (res.qualified_cpa || 0) * (config?.cpaValue || 0);
-            const calculatedRev = (res.rvs || 0) * ((config?.revPercentage || 0) / 100);
+            // Casa selecionada → usa a linha daquela casa e a taxa por-casa;
+            // "Todas as casas" → agregado do afiliado e taxa de topo (atual).
+            const row = isAllBrands ? res : (selectedBrandRow ?? emptyResult);
+            const rates = isAllBrands
+              ? { cpaValue: config?.cpaValue || 0, revPercentage: config?.revPercentage || 0 }
+              : resolveBrandRates(config, String(selectedBrandRow?.id ?? ''));
+            const calculatedCpa = (row.qualified_cpa || 0) * rates.cpaValue;
+            const calculatedRev = (row.rvs || 0) * (rates.revPercentage / 100);
             const totalCommission = calculatedCpa + calculatedRev;
 
             return (
@@ -208,7 +230,7 @@ export default function ClientDashboard() {
                         </div>
                         <div>
                           <div className="flex items-center gap-1 text-[10px] font-bold text-slate-500 dark:text-neutral-300 uppercase tracking-widest mb-1">
-                            CPA Calculado (R$ {config?.cpaValue || 0}/CPA) <InfoTooltip text="CPA Qualificado × valor de CPA do seu contrato. Quantos cadastros qualificaram, multiplicado pelo valor por aquisição." size={10} align="left" />
+                            CPA Calculado (R$ {rates.cpaValue}/CPA) <InfoTooltip text="CPA Qualificado × valor de CPA do seu contrato. Quantos cadastros qualificaram, multiplicado pelo valor por aquisição." size={10} align="left" />
                           </div>
                           <p className="text-xl font-black text-slate-800 dark:text-white">
                             R$ {calculatedCpa.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -224,7 +246,7 @@ export default function ClientDashboard() {
                         </div>
                         <div>
                           <div className="flex items-center gap-1 text-[10px] font-bold text-slate-500 dark:text-neutral-300 uppercase tracking-widest mb-1">
-                            REV Share ({config?.revPercentage || 0}%) <InfoTooltip text="Participação na receita: percentual do seu contrato aplicado sobre o RVS (receita compartilhada) do período." size={10} align="left" />
+                            REV Share ({rates.revPercentage}%) <InfoTooltip text="Participação na receita: percentual do seu contrato aplicado sobre o RVS (receita compartilhada) do período." size={10} align="left" />
                           </div>
                           <p className="text-xl font-black text-slate-800 dark:text-white">
                             R$ {calculatedRev.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -245,11 +267,11 @@ export default function ClientDashboard() {
                       <div className="p-3 bg-slate-50 dark:bg-neutral-800 rounded-2xl text-slate-400 group-hover:text-brand transition-colors">
                         <UserPlus size={20} />
                       </div>
-                      <TrendBadge change={percentChange(res.registrations || 0, prevRegistrations ?? 0)} />
+                      <TrendBadge change={isAllBrands ? percentChange(row.registrations || 0, prevRegistrations ?? 0) : 0} />
                     </div>
                     <div className="space-y-1">
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Cadastros</p>
-                      <h4 className="text-4xl font-black text-slate-900 dark:text-white tracking-tighter">{res.registrations || 0}</h4>
+                      <h4 className="text-4xl font-black text-slate-900 dark:text-white tracking-tighter">{row.registrations || 0}</h4>
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2">Leads Qualificados</p>
                     </div>
                   </motion.div>
@@ -267,14 +289,14 @@ export default function ClientDashboard() {
                       <div className="flex items-center gap-2">
                         <div className="bg-slate-100 dark:bg-neutral-800 px-2 py-1 rounded-lg">
                           <span className="text-[10px] font-black text-slate-500">
-                            {res.registrations > 0 ? ((res.first_deposits / res.registrations) * 100).toFixed(1) : 0}% conv.
+                            {row.registrations > 0 ? ((row.first_deposits / row.registrations) * 100).toFixed(1) : 0}% conv.
                           </span>
                         </div>
                       </div>
                     </div>
                     <div className="space-y-1">
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Primeiros Depósitos</p>
-                      <h4 className="text-4xl font-black text-slate-900 dark:text-white tracking-tighter">{res.first_deposits || 0}</h4>
+                      <h4 className="text-4xl font-black text-slate-900 dark:text-white tracking-tighter">{row.first_deposits || 0}</h4>
                       <div className="flex items-center gap-1.5 mt-2">
                         <div className="w-1.5 h-1.5 rounded-full bg-brand animate-pulse"></div>
                         <p className="text-[10px] font-bold text-brand uppercase tracking-widest leading-none">Contas Ativas</p>
@@ -294,13 +316,13 @@ export default function ClientDashboard() {
                       </div>
                       <div className="bg-slate-100 dark:bg-neutral-800 px-2 py-1 rounded-lg">
                         <span className="text-[10px] font-black text-slate-500">
-                          {res.first_deposits > 0 ? ((res.qualified_cpa / res.first_deposits) * 100).toFixed(1) : 0}% conv.
+                          {row.first_deposits > 0 ? ((row.qualified_cpa / row.first_deposits) * 100).toFixed(1) : 0}% conv.
                         </span>
                       </div>
                     </div>
                     <div className="space-y-1">
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">CPA Qualificado</p>
-                      <h4 className="text-4xl font-black text-slate-900 dark:text-white tracking-tighter">{res.qualified_cpa || 0}</h4>
+                      <h4 className="text-4xl font-black text-slate-900 dark:text-white tracking-tighter">{row.qualified_cpa || 0}</h4>
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2 opacity-60">Meta Alcançada</p>
                     </div>
                   </motion.div>

@@ -17,10 +17,12 @@ import {
 } from '../services/affiliateService';
 import DateRangePicker from '../components/DateRangePicker';
 import BrandBreakdown from '../components/BrandBreakdown';
+import BrandFilter from '../components/BrandFilter';
 import CampaignBreakdown from '../components/CampaignBreakdown';
 import DailyPerformanceChart from '../components/DailyPerformanceChart';
 import AffiliatePerformanceChart from '../components/AffiliatePerformanceChart';
 import { DateRange, getDefaultRange } from '../lib/dateRange';
+import { ALL_BRANDS, getKnownBrandName } from '../lib/brand';
 import { cn, humanizeName } from '../lib/utils';
 
 const brl = (n: number) => `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -31,6 +33,8 @@ const brl = (n: number) => `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigi
 export default function SpecialDashboard() {
   const { profile } = useAuth();
   const [range, setRange] = useState<DateRange>(() => getDefaultRange());
+  // Filtro por casa (client-side a partir do groupBy=brand da rede já buscado).
+  const [selectedBrand, setSelectedBrand] = useState<string>(ALL_BRANDS);
   const [loading, setLoading] = useState(true);
   const [special, setSpecial] = useState<SpecialAffiliate | null>(null);
   const [results, setResults] = useState<any[]>([]);
@@ -92,8 +96,19 @@ export default function SpecialDashboard() {
   const ownRow = rowById(ownId);
   const subIds = special?.subAffiliateIds?.map(String) || [];
 
-  // Funil agregado da sub-rede (own + subs).
-  const funnelTotals = results.reduce((acc, r) => ({
+  // Filtro por casa: "Todas as casas" usa as linhas por afiliado (own+subs); uma
+  // casa específica usa a linha agregada daquela casa (groupBy=brand da rede).
+  // Escopa só a grade de métricas e o funil; o lucro líquido (spread por sub) e os
+  // demais blocos seguem na rede inteira — o spread não se divide por casa aqui.
+  const brandNameOf = (r: any) =>
+    getKnownBrandName(String(r?.id ?? ''), String(r?.label || r?.name || '')) ?? String(r?.label || r?.name || 'Casa');
+  const availableBrands = Array.from(new Set(brandResults.map(brandNameOf))).filter(Boolean);
+  const isAllBrands = selectedBrand === ALL_BRANDS;
+  const selectedBrandRow = isAllBrands ? null : brandResults.find((r) => brandNameOf(r) === selectedBrand);
+  const metricRows = isAllBrands ? results : (selectedBrandRow ? [selectedBrandRow] : []);
+
+  // Funil agregado da sub-rede (own + subs), escopado pela casa selecionada.
+  const funnelTotals = metricRows.reduce((acc, r) => ({
     registrations: acc.registrations + (r.registrations || 0),
     firstDeposits: acc.firstDeposits + (r.first_deposits || 0),
     deposit: acc.deposit + (r.deposit || 0),
@@ -113,10 +128,13 @@ export default function SpecialDashboard() {
   // Comissão total do especial = taxa PRÓPRIA aplicada sobre TODA a rede (própria + subs).
   // É o que a agência paga ao especial; o lucro líquido = comissão total − repasse aos subs.
   // Mantém a regra do lucro líquido: tudo à taxa do especial, nunca a comissão bruta da casa.
-  const comissaoTotal = results.reduce((sum, r) => sum + calcAffiliatePayout(r, ownConfig), 0);
-  const cpaPortion = results.reduce((sum, r) => sum + (r.qualified_cpa || 0) * (ownConfig.cpaValue || 0), 0);
-  const revPortion = results.reduce((sum, r) => sum + (r.rvs || 0) * ((ownConfig.revPercentage || 0) / 100), 0);
-  const repasse = comissaoTotal - earnings;
+  // `Rede` = sempre a rede inteira (alimenta o lucro líquido); as versões scopadas
+  // abaixo respeitam o filtro de casa e alimentam só a grade de métricas.
+  const comissaoTotalRede = results.reduce((sum, r) => sum + calcAffiliatePayout(r, ownConfig), 0);
+  const repasse = comissaoTotalRede - earnings;
+  const comissaoTotal = metricRows.reduce((sum, r) => sum + calcAffiliatePayout(r, ownConfig), 0);
+  const cpaPortion = metricRows.reduce((sum, r) => sum + (r.qualified_cpa || 0) * (ownConfig.cpaValue || 0), 0);
+  const revPortion = metricRows.reduce((sum, r) => sum + (r.rvs || 0) * ((ownConfig.revPercentage || 0) / 100), 0);
 
   // Cards de métrica (espelham o /admin, capados à rede do especial).
   const metrics = [
@@ -204,7 +222,10 @@ export default function SpecialDashboard() {
           </h1>
           <p className="text-slate-500 dark:text-neutral-400 text-sm mt-2">{subIds.length} sub-afiliado(s) + sua produção.</p>
         </div>
-        <DateRangePicker value={range} onChange={setRange} />
+        <div className="flex flex-col items-start md:items-end gap-3">
+          <DateRangePicker value={range} onChange={setRange} />
+          <BrandFilter brands={availableBrands} value={selectedBrand} onChange={setSelectedBrand} />
+        </div>
       </header>
 
       {/* Cards de métrica — espelham o /admin (capados à rede): nº de afiliados,
@@ -253,7 +274,7 @@ export default function SpecialDashboard() {
           </span>
           <h3 className="text-3xl md:text-4xl font-bold tracking-tighter text-emerald-700 dark:text-emerald-400">{brl(earnings)}</h3>
           <p className="text-[11px] font-medium text-slate-500 dark:text-neutral-400 mt-2 max-w-2xl">
-            Comissão total ({brl(comissaoTotal)}) − repasses aos sub-afiliados ({brl(repasse)}). Inclui sua produção própria ({brl(ownPayout)}) + o spread sobre a rede.
+            Comissão total ({brl(comissaoTotalRede)}) − repasses aos sub-afiliados ({brl(repasse)}). Inclui sua produção própria ({brl(ownPayout)}) + o spread sobre a rede.
           </p>
         </div>
         <div className="relative shrink-0 p-3.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-500">
