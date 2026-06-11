@@ -2,8 +2,9 @@
 
 A API da OTG **não fornece logo** das casas (verificado por probe direto em
 2026-06-10: `brand` vem só como `{id, name}`; `/brands` e `/houses` dão 404). As
-fotos do portal `partners.grupootg.com` são assets do front-end deles. Por isso
-hospedamos as logos aqui.
+fotos do portal `partners.grupootg.com` são assets do front-end deles — ficam num
+bucket público do Supabase (`betting-house-logos`, arquivo = `<brandId>-<ts>.png`).
+Baixamos as oficiais e hospedamos aqui (`superbet.png`, `sportingbet.png`).
 
 ## Como adicionar / trocar uma logo
 
@@ -15,9 +16,9 @@ hospedamos as logos aqui.
    Se usar PNG, ajuste o caminho `logo` em `KNOWN_BRANDS`.
 3. Sem alteração de código: o `BrandLogo` resolve o caminho pelo registro.
 
-> Os arquivos atuais são **placeholders** (retângulo colorido com a inicial) —
-> substitua pelos oficiais. Se um arquivo faltar/404, a UI cai no avatar de
-> inicial automaticamente (`BrandLogo` tem fallback).
+> Os arquivos atuais são as **logos oficiais** (baixadas do bucket da OTG). Se um
+> arquivo faltar/404, a UI cai no avatar de inicial automaticamente (`BrandLogo`
+> tem fallback).
 
 ## Adicionar uma casa nova
 
