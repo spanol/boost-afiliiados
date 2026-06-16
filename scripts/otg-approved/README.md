@@ -57,6 +57,16 @@ Boost precisa para mostrar resultados). **Único risco: homônimos** → confirm
 - **`fetch-approved-console.js`** — script para **regerar** o snapshot à mão
   (colar no Console do DevTools, logado em `links.otgpartners.com.br`).
 
+## Usar no Boost (pré-cadastro)
+
+No `/admin` → **Gestão de Afiliados** → botão **"Importar aprovados"** → selecionar o
+`snapshot-*.json`. O servidor faz upsert em `pending_affiliates` (id sintético
+`pending_<nameKey>_<casa>`), pula quem já está no relatório e mostra os demais na
+lista com badge **"Pré-cadastro · aguardando produção"**. Dá para **gerar o
+acesso** (convite) do pendente ali mesmo. Quando o afiliado produz, o
+**"Sincronizar afiliados"** reconcilia: troca o id sintético pelo `affiliateId`
+real (no pendente e no login já criado) e o badge some.
+
 ## Atualizar o snapshot (manual)
 
 1. Logar em `https://links.otgpartners.com.br` (conta da agência).

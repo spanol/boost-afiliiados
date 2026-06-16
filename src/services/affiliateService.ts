@@ -804,6 +804,7 @@ export async function createUser(userData: AffiliateUserData): Promise<void> {
 export interface SyncResult {
   synced: number;
   total: number;
+  reconciled?: number;
 }
 
 export async function syncAffiliates(): Promise<SyncResult> {
@@ -814,6 +815,59 @@ export async function syncAffiliates(): Promise<SyncResult> {
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
     throw new Error(errorData.error || errorData.message || `Erro ao sincronizar: ${response.status}`);
+  }
+  return response.json();
+}
+
+// --- Pré-cadastro (afiliados aprovados na OTG, aguardando produção) ------------
+// Importados do snapshot `scripts/otg-approved` (links.otgpartners). Aparecem na
+// lista do master com badge "aguardando produção" e podem receber convite/login
+// antes de existir no relatório; o servidor reconcilia o affiliateId real (id
+// sintético `pending_<nameKey>_<casa>`) por nameKey quando o afiliado produz.
+export interface PendingAffiliate {
+  id: string;            // affiliateId sintético: pending_<nameKey>_<casa>
+  name: string;
+  nameKey: string;
+  house: string;
+  email?: string | null;
+  phone?: string | null;
+  registerUrl?: string | null;
+  status: 'pending' | 'reconciled';
+  affiliateId?: string;  // id real do relatório, após reconciliar
+}
+
+export async function fetchPendingAffiliates(): Promise<PendingAffiliate[]> {
+  try {
+    const response = await authFetch('/api/pending-affiliates', { method: 'GET', headers: { Accept: 'application/json' } });
+    if (!response.ok) {
+      const e = await response.json().catch(() => ({}));
+      throw new Error(e.error || e.message || `Erro ao listar pré-cadastros: ${response.status}`);
+    }
+    const data = await response.json();
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    console.error('Error fetching pending affiliates:', error);
+    return [];
+  }
+}
+
+export interface ImportPendingResult {
+  imported: number;
+  skipped: number;
+  reconciled: number;
+  total: number;
+}
+
+// Recebe as linhas do snapshot (name, nameKey, house, email, phone, registerUrl).
+export async function importPendingAffiliates(rows: Array<Partial<PendingAffiliate>>): Promise<ImportPendingResult> {
+  const response = await authFetch('/api/pending-affiliates/import', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ rows }),
+  });
+  if (!response.ok) {
+    const e = await response.json().catch(() => ({}));
+    throw new Error(e.error || e.message || `Erro ao importar pré-cadastros: ${response.status}`);
   }
   return response.json();
 }

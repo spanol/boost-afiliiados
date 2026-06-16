@@ -11,14 +11,20 @@ import {
   CheckCircle,
   Percent,
   DownloadCloud,
-  Crown
+  Crown,
+  UploadCloud,
+  UserPlus,
+  Copy,
+  Clock,
+  X
 } from 'lucide-react';
-import { fetchAffiliates, fetchAffiliateConfigs, fetchAffiliateStatuses, saveAffiliateConfig, updateAffiliateStatus, createAuditLog, fetchRegisteredUsers, updateUserRole, syncAffiliates, AffiliateConfig, fetchSpecialAffiliates, SpecialAffiliate } from '../services/affiliateService';
+import { fetchAffiliates, fetchAffiliateConfigs, fetchAffiliateStatuses, saveAffiliateConfig, updateAffiliateStatus, createAuditLog, fetchRegisteredUsers, updateUserRole, syncAffiliates, AffiliateConfig, fetchSpecialAffiliates, SpecialAffiliate, fetchPendingAffiliates, importPendingAffiliates, createAccessInvite } from '../services/affiliateService';
 import SpecialAffiliateModal from '../components/SpecialAffiliateModal';
 import { useToast } from '../contexts/ToastContext';
 import { cn, humanizeName } from '../lib/utils';
 import BrandFilter from '../components/BrandFilter';
-import { getBrandName, uniqueBrands, ALL_BRANDS } from '../lib/brand';
+import { getBrandName, uniqueBrands, ALL_BRANDS, getKnownBrandName } from '../lib/brand';
+import { normalizeNameKey } from '../lib/affiliateName';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate, Navigate } from 'react-router-dom';
 
@@ -34,6 +40,11 @@ interface Affiliate {
   createdAt: string;
   userUid?: string;
   role?: 'admin' | 'client';
+  // Pré-cadastro (aprovado na OTG, ainda fora do relatório). [[pre-cadastro]]
+  isPending?: boolean;
+  nameKey?: string;
+  registerUrl?: string | null;
+  phone?: string | null;
 }
 
 export default function AffiliatesList() {
@@ -56,6 +67,12 @@ export default function AffiliatesList() {
   const [specials, setSpecials] = useState<Record<string, SpecialAffiliate>>({});
   const [specialModal, setSpecialModal] = useState<{ open: boolean; affiliate?: Affiliate }>({ open: false });
 
+  // Pré-cadastro: import do snapshot de aprovados + geração de convite/acesso.
+  const [importModal, setImportModal] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [invitingId, setInvitingId] = useState<string | null>(null);
+  const [inviteModal, setInviteModal] = useState<{ open: boolean; name?: string; url?: string }>({ open: false });
+
   const isAdmin = profile?.role === 'admin';
   const pageTitle = isAdmin ? 'Gestão de Afiliados' : 'Meus Clientes';
   const pageSubTitle = isAdmin 
@@ -72,12 +89,13 @@ export default function AffiliatesList() {
         return;
       }
 
-      const [affData, configData, statusData, registeredUsers, specialData] = await Promise.all([
+      const [affData, configData, statusData, registeredUsers, specialData, pendingData] = await Promise.all([
         fetchAffiliates(),
         fetchAffiliateConfigs(),
         fetchAffiliateStatuses(),
         fetchRegisteredUsers(),
-        fetchSpecialAffiliates()
+        fetchSpecialAffiliates(),
+        fetchPendingAffiliates()
       ]);
       setSpecials(specialData);
 
@@ -120,7 +138,29 @@ export default function AffiliatesList() {
         return true;
       });
 
-      setAffiliates(uniqueAffiliates);
+      // Pré-cadastros (aprovados na OTG, ainda sem produção no relatório). Só os
+      // 'pending'; deduplica por nameKey contra os já presentes (relatório/login)
+      // para o pendente sumir assim que o afiliado real aparece. O id sintético
+      // (pending_<nameKey>_<casa>) é o affiliateId que o convite/login usam até a
+      // reconciliação trocar pelo id real no servidor.
+      const presentKeys = new Set(uniqueAffiliates.map((a: any) => normalizeNameKey(a.name || a.label)));
+      const pendingItems: Affiliate[] = (pendingData || [])
+        .filter((p) => p.status === 'pending' && !presentKeys.has(p.nameKey))
+        .map((p) => ({
+          id: p.id,
+          name: p.name,
+          email: p.email || '',
+          status: 'pending',
+          brand: { id: p.house, name: getKnownBrandName(p.house) || p.house },
+          createdAt: '',
+          isPending: true,
+          nameKey: p.nameKey,
+          registerUrl: p.registerUrl ?? null,
+          phone: p.phone ?? null,
+          role: 'client',
+        } as Affiliate));
+
+      setAffiliates([...uniqueAffiliates, ...pendingItems]);
       setConfigs(configData);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao carregar dados da API');
@@ -137,12 +177,51 @@ export default function AffiliatesList() {
     setSyncing(true);
     try {
       const result = await syncAffiliates();
-      push({ type: 'success', message: `${result.synced} afiliados sincronizados da API externa.` });
+      const extra = result.reconciled ? ` · ${result.reconciled} pré-cadastro(s) reconciliado(s)` : '';
+      push({ type: 'success', message: `${result.synced} afiliados sincronizados da API externa.${extra}` });
       await loadData();
     } catch (err) {
       push({ type: 'error', message: err instanceof Error ? err.message : 'Falha ao sincronizar afiliados.' });
     } finally {
       setSyncing(false);
+    }
+  };
+
+  // Import do snapshot de aprovados (scripts/otg-approved/snapshot-*.json).
+  const handleImportFile = async (file: File) => {
+    setImporting(true);
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      const rows = Array.isArray(parsed) ? parsed : (Array.isArray(parsed?.rows) ? parsed.rows : null);
+      if (!rows || !rows.length) throw new Error('Snapshot inválido: esperado um array ou { rows: [...] }.');
+      const clean = rows.map((r: any) => ({
+        name: r.name, nameKey: r.nameKey, house: r.house,
+        email: r.email ?? null, phone: r.phone ?? null, registerUrl: r.registerUrl ?? null,
+      }));
+      const result = await importPendingAffiliates(clean);
+      push({ type: 'success', message: `${result.imported} importado(s) · ${result.reconciled} já no relatório.` });
+      setImportModal(false);
+      await loadData();
+    } catch (err) {
+      push({ type: 'error', message: err instanceof Error ? err.message : 'Falha ao importar snapshot.' });
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  // Gera o convite/acesso de um pré-cadastro (amarrado ao id sintético até a
+  // reconciliação). Reaproveita o fluxo de convite existente.
+  const handleGenerateInvite = async (item: Affiliate, e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setInvitingId(item.id);
+    try {
+      const invite = await createAccessInvite(item.id, item.name);
+      setInviteModal({ open: true, name: item.name, url: invite.url });
+    } catch (err) {
+      push({ type: 'error', message: err instanceof Error ? err.message : 'Falha ao gerar convite.' });
+    } finally {
+      setInvitingId(null);
     }
   };
 
@@ -283,11 +362,53 @@ export default function AffiliatesList() {
       {specialModal.open && specialModal.affiliate && (
         <SpecialAffiliateModal
           affiliate={specialModal.affiliate}
-          allAffiliates={affiliates}
+          allAffiliates={affiliates.filter((a) => !a.isPending)}
           specials={specials}
           onClose={() => setSpecialModal({ open: false })}
           onSaved={loadData}
         />
+      )}
+
+      {/* Pré-cadastro · Import do snapshot de aprovados */}
+      {importModal && (
+        <div onClick={() => !importing && setImportModal(false)} className="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm p-4">
+          <div className="flex min-h-full items-center justify-center">
+            <motion.div onClick={(e) => e.stopPropagation()} initial={{ opacity: 0, scale: 0.96, y: 8 }} animate={{ opacity: 1, scale: 1, y: 0 }} className="w-full max-w-md p-6 bg-white dark:bg-neutral-900 rounded-3xl shadow-2xl border border-slate-200/70 dark:border-neutral-800">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h3 className="text-lg font-bold tracking-tight text-slate-900 dark:text-white">Importar aprovados</h3>
+                  <p className="text-sm text-slate-500 dark:text-neutral-400 mt-2">Selecione o <span className="font-mono text-xs">snapshot-*.json</span> (afiliados aprovados na OTG). Eles entram como <span className="font-semibold">pré-cadastro</span> e saem da fila quando aparecem no relatório.</p>
+                </div>
+                <button onClick={() => !importing && setImportModal(false)} className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-neutral-200 transition-colors"><X size={18} /></button>
+              </div>
+              <label className={cn('mt-5 flex flex-col items-center justify-center gap-2 px-4 py-8 rounded-2xl border-2 border-dashed cursor-pointer transition-colors', importing ? 'opacity-60 pointer-events-none border-slate-200 dark:border-neutral-700' : 'border-slate-300 dark:border-neutral-700 hover:border-amber-500/60')}>
+                {importing ? <Loader2 size={22} className="text-amber-500 animate-spin" /> : <UploadCloud size={22} className="text-slate-400 dark:text-neutral-500" />}
+                <span className="text-xs font-bold text-slate-600 dark:text-neutral-300">{importing ? 'Importando...' : 'Clique para selecionar o arquivo'}</span>
+                <span className="text-[10px] text-slate-400 dark:text-neutral-500">JSON do snapshot</span>
+                <input type="file" accept="application/json,.json" disabled={importing} className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) handleImportFile(f); e.currentTarget.value = ''; }} />
+              </label>
+            </motion.div>
+          </div>
+        </div>
+      )}
+
+      {/* Pré-cadastro · Convite/acesso gerado */}
+      {inviteModal.open && (
+        <div onClick={() => setInviteModal({ open: false })} className="fixed inset-0 z-50 overflow-y-auto bg-black/50 backdrop-blur-sm p-4">
+          <div className="flex min-h-full items-center justify-center">
+            <motion.div onClick={(e) => e.stopPropagation()} initial={{ opacity: 0, scale: 0.96, y: 8 }} animate={{ opacity: 1, scale: 1, y: 0 }} className="w-full max-w-md p-6 bg-white dark:bg-neutral-900 rounded-3xl shadow-2xl border border-slate-200/70 dark:border-neutral-800">
+              <h3 className="text-lg font-bold tracking-tight text-slate-900 dark:text-white">Convite gerado</h3>
+              <p className="text-sm text-slate-500 dark:text-neutral-400 mt-2">Envie este link para <span className="font-semibold text-slate-700 dark:text-neutral-200">{inviteModal.name}</span> criar o próprio acesso. Válido por 7 dias.</p>
+              <div className="mt-4 flex items-center gap-2">
+                <input readOnly value={inviteModal.url || ''} className="flex-1 px-3 py-2.5 bg-slate-50 dark:bg-neutral-800/60 border border-slate-200 dark:border-neutral-700 rounded-xl text-xs font-mono outline-none dark:text-white" />
+                <button onClick={() => { navigator.clipboard.writeText(inviteModal.url || ''); push({ type: 'success', message: 'Link copiado.' }); }} className="p-2.5 rounded-xl bg-amber-50 text-amber-600 hover:bg-amber-500 hover:text-white dark:bg-amber-900/10 dark:text-amber-400 dark:hover:bg-amber-500 dark:hover:text-white transition-all" title="Copiar link"><Copy size={16} /></button>
+              </div>
+              <div className="mt-6 flex justify-end">
+                <button onClick={() => setInviteModal({ open: false })} className="px-4 py-2 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-neutral-900 text-xs font-bold hover:opacity-90 transition-all">Concluir</button>
+              </div>
+            </motion.div>
+          </div>
+        </div>
       )}
 
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -307,6 +428,17 @@ export default function AffiliatesList() {
         <div className="flex items-center gap-2">
           {/* Sincronizar é admin-only (o endpoint /api/affiliates/sync exige admin);
               o afiliado especial não tem acesso, então o botão nem aparece pra ele. */}
+          {isAdmin && (
+            <button
+              onClick={() => setImportModal(true)}
+              disabled={loading}
+              title="Importar afiliados aprovados do snapshot da OTG (pré-cadastro)"
+              className="flex items-center gap-2 px-4 py-2.5 bg-white dark:bg-neutral-900 border border-slate-200 dark:border-neutral-800 rounded-full text-xs font-bold text-slate-600 dark:text-neutral-300 hover:border-amber-500/40 hover:text-amber-500 transition-all shadow-sm disabled:opacity-50"
+            >
+              <UploadCloud size={14} />
+              Importar aprovados
+            </button>
+          )}
           {isAdmin && (
             <button
               onClick={handleSync}
@@ -405,8 +537,8 @@ export default function AffiliatesList() {
                   return (
                     <tr
                       key={affiliateId || Math.random()}
-                      className="hover:bg-slate-50/70 dark:hover:bg-white/[0.03] transition-colors group cursor-pointer"
-                      onClick={() => handleOpenDetails(item)}
+                      className={cn("transition-colors group", item.isPending ? "bg-amber-50/40 dark:bg-amber-900/[0.06]" : "hover:bg-slate-50/70 dark:hover:bg-white/[0.03] cursor-pointer")}
+                      onClick={() => { if (!item.isPending) handleOpenDetails(item); }}
                     >
                       <td className="px-6 py-4">
                         <div className="flex flex-col gap-1">
@@ -418,6 +550,11 @@ export default function AffiliatesList() {
                               {getBrandName(item)}
                             </span>
                           )}
+                          {item.isPending && (
+                            <span className="inline-flex w-fit items-center gap-1 px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-900/30 border border-amber-200/70 dark:border-amber-900/50 text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                              <Clock size={10} /> Pré-cadastro
+                            </span>
+                          )}
                           {ownerBySubId[String(affiliateId)] && (
                             <span className="inline-flex w-fit items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200/60 dark:border-amber-900/40 text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400">
                               <Crown size={10} /> Pertence a {ownerBySubId[String(affiliateId)].name}
@@ -425,7 +562,26 @@ export default function AffiliatesList() {
                           )}
                         </div>
                       </td>
-                      {isAdmin && (
+                      {isAdmin && (item.isPending ? (
+                        <>
+                          <td className="px-6 py-4" colSpan={4}>
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 dark:bg-amber-900/20 border border-amber-200/60 dark:border-amber-900/40 text-[10px] font-bold uppercase tracking-widest text-amber-700 dark:text-amber-400">
+                              <Clock size={11} /> Aguardando produção · sem ID de relatório
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            <button
+                              onClick={(e) => handleGenerateInvite(item, e)}
+                              disabled={invitingId === affiliateId}
+                              title="Gerar convite de acesso para o afiliado"
+                              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-slate-900 dark:bg-white text-white dark:text-neutral-900 text-[11px] font-bold hover:opacity-90 transition-all disabled:opacity-50"
+                            >
+                              {invitingId === affiliateId ? <Loader2 size={13} className="animate-spin" /> : <UserPlus size={13} />}
+                              Gerar acesso
+                            </button>
+                          </td>
+                        </>
+                      ) : (
                         <>
                           <td className="px-6 py-4" onClick={(e) => e.stopPropagation()}>
                             <div className="max-w-[160px]">
@@ -521,7 +677,7 @@ export default function AffiliatesList() {
                             </div>
                           </td>
                         </>
-                      )}
+                      ))}
                     </tr>
                   );
                 })}
@@ -535,8 +691,8 @@ export default function AffiliatesList() {
               const affiliateId = item.id || item._id;
               const config = configs[affiliateId] || { affiliateId, cpaValue: 0, revPercentage: 0 };
               return (
-                <div key={affiliateId || Math.random()} className="p-4 space-y-4">
-                  <div className="cursor-pointer" onClick={() => handleOpenDetails(item)}>
+                <div key={affiliateId || Math.random()} className={cn("p-4 space-y-4", item.isPending && "bg-amber-50/40 dark:bg-amber-900/[0.06]")}>
+                  <div className={cn(!item.isPending && "cursor-pointer")} onClick={() => { if (!item.isPending) handleOpenDetails(item); }}>
                     <span className="block font-bold text-sm text-slate-800 dark:text-neutral-100">
                       {humanizeName(item.name || item.fullName || item.nome) || 'Sem Nome'}
                     </span>
@@ -545,13 +701,32 @@ export default function AffiliatesList() {
                         {getBrandName(item)}
                       </span>
                     )}
+                    {item.isPending && (
+                      <span className="inline-flex mt-1 ml-1 items-center gap-1 px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-900/30 border border-amber-200/70 dark:border-amber-900/50 text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                        <Clock size={10} /> Pré-cadastro
+                      </span>
+                    )}
                     {ownerBySubId[String(affiliateId)] && (
                       <span className="inline-flex mt-1 ml-1 items-center gap-1 px-2 py-0.5 rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200/60 dark:border-amber-900/40 text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400">
                         <Crown size={10} /> Pertence a {ownerBySubId[String(affiliateId)].name}
                       </span>
                     )}
                   </div>
-                  {isAdmin && (
+                  {isAdmin && (item.isPending ? (
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 dark:bg-amber-900/20 border border-amber-200/60 dark:border-amber-900/40 text-[10px] font-bold uppercase tracking-widest text-amber-700 dark:text-amber-400">
+                        <Clock size={11} /> Aguardando produção
+                      </span>
+                      <button
+                        onClick={(e) => handleGenerateInvite(item, e)}
+                        disabled={invitingId === affiliateId}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-neutral-900 text-xs font-bold hover:opacity-90 transition-all disabled:opacity-50"
+                      >
+                        {invitingId === affiliateId ? <Loader2 size={14} className="animate-spin" /> : <UserPlus size={14} />}
+                        Gerar acesso
+                      </button>
+                    </div>
+                  ) : (
                     <>
                       <div className="grid grid-cols-2 gap-3">
                         <label className="block">
@@ -635,7 +810,7 @@ export default function AffiliatesList() {
                         {specials[affiliateId]?.active ? 'Afiliado especial' : 'Tornar especial'}
                       </button>
                     </>
-                  )}
+                  ))}
                 </div>
               );
             })}

@@ -455,6 +455,56 @@ async function startServer() {
     return Array.isArray(list) ? list : [];
   };
 
+  // --- Pré-cadastro (afiliados aprovados na OTG, ainda fora do relatório) -------
+  // A OTG separa PROVISIONAMENTO (links.otgpartners) de RELATÓRIO (a x-api-key só
+  // traz quem já produziu). Importamos os aprovados como `pending_affiliates` com
+  // um affiliateId SINTÉTICO (`pending_<nameKey>_<casa>`) — assim o pendente é
+  // cidadão de 1ª classe no fluxo existente (lista/convite/accept/dashboard) sem
+  // reescrever nada. A ponte com o relatório é o NOME normalizado; quando o
+  // afiliado aparece no relatório, reconciliamos trocando o id sintético pelo
+  // real (no doc do pendente e em qualquer login já criado). Ver
+  // scripts/otg-approved/README.md e a memória boost-external-api-state.
+  const normNameKey = (s?: string | null) =>
+    String(s ?? '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const brandNameOf = (aff: any): string => {
+    const b = aff?.brand ?? aff?.marca;
+    if (!b) return '';
+    if (typeof b === 'string') return b;
+    return b.name ?? b.nome ?? b.label ?? '';
+  };
+  const pendingDocId = (nameKey: string, house: string) => `pending_${nameKey}_${normNameKey(house)}`;
+
+  // Casa pendente ↔ afiliado do relatório por (nameKey + casa). Marca o pendente
+  // como reconciliado, grava o affiliateId real e reaponta logins já criados.
+  const reconcilePending = async (reportingAffiliates: any[]): Promise<number> => {
+    if (!adminDb) return 0;
+    const byKey = new Map<string, any>();
+    for (const a of reportingAffiliates) {
+      const nk = normNameKey(a?.name ?? a?.label);
+      const hs = normNameKey(brandNameOf(a));
+      if (nk) byKey.set(`${nk}|${hs}`, a);
+    }
+    const pend = await adminDb.collection('pending_affiliates').where('status', '==', 'pending').get();
+    let reconciled = 0;
+    for (const docSnap of pend.docs) {
+      const p = docSnap.data();
+      const match = byKey.get(`${String(p.nameKey)}|${normNameKey(p.house)}`);
+      const realId = String(match?.id ?? match?._id ?? '').trim();
+      if (!realId) continue;
+      await docSnap.ref.set(
+        { status: 'reconciled', affiliateId: realId, reconciledAt: admin.firestore.FieldValue.serverTimestamp() },
+        { merge: true }
+      );
+      // reaponta logins existentes que ficaram amarrados ao id sintético
+      const linked = await adminDb.collection('users').where('affiliateId', '==', docSnap.id).get();
+      for (const u of linked.docs) {
+        await u.ref.set({ affiliateId: realId, updatedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+      }
+      reconciled++;
+    }
+    return reconciled;
+  };
+
   // Sync the external affiliate list into the local `affiliates` collection.
   app.post('/api/affiliates/sync', requireAdmin, async (_req, res) => {
     if (!adminDb) {
@@ -482,10 +532,77 @@ async function startServer() {
         }
         await batch.commit();
       }
-      return res.json({ synced: written, total: affiliates.length });
+      // Após espelhar o relatório, reconcilia os pré-cadastros que já apareceram.
+      const reconciled = await reconcilePending(affiliates);
+      return res.json({ synced: written, total: affiliates.length, reconciled });
     } catch (error: any) {
       console.error('Error syncing affiliates:', error);
       return res.status(500).json({ error: error.message || 'Erro interno sincronizando afiliados.' });
+    }
+  });
+
+  // Lista os pré-cadastros (afiliados aprovados importados do snapshot da OTG).
+  app.get('/api/pending-affiliates', requireAdmin, async (_req, res) => {
+    if (!adminDb) {
+      return res.status(500).json({ error: 'Firebase Admin não está inicializado.' });
+    }
+    try {
+      const snap = await adminDb.collection('pending_affiliates').get();
+      const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      return res.json(rows);
+    } catch (error: any) {
+      console.error('Error listing pending affiliates:', error);
+      return res.status(500).json({ error: error.message || 'Erro interno listando pré-cadastros.' });
+    }
+  });
+
+  // Importa o snapshot de aprovados (upsert por nameKey+casa) e já reconcilia
+  // contra o relatório atual. Não rebaixa pendentes já reconciliados.
+  app.post('/api/pending-affiliates/import', requireAdmin, async (req, res) => {
+    if (!adminDb) {
+      return res.status(500).json({ error: 'Firebase Admin não está inicializado.' });
+    }
+    try {
+      const rows = Array.isArray(req.body?.rows) ? req.body.rows : null;
+      if (!rows) {
+        return res.status(400).json({ error: 'Envie { rows: [...] } com as linhas do snapshot.' });
+      }
+      let imported = 0;
+      let skipped = 0;
+      for (const r of rows) {
+        const name = String(r?.name ?? '').trim();
+        const house = String(r?.house ?? '').trim();
+        const nameKey = normNameKey(r?.nameKey || name);
+        if (!name || !house || !nameKey) { skipped++; continue; }
+        const id = pendingDocId(nameKey, house);
+        const ref = adminDb.collection('pending_affiliates').doc(id);
+        const prev = await ref.get();
+        await ref.set({
+          id,
+          name,
+          nameKey,
+          house,
+          email: r?.email ?? null,
+          phone: r?.phone ?? null,
+          registerUrl: r?.registerUrl ?? null,
+          // não rebaixa um já reconciliado; novo entra como 'pending'
+          status: prev.exists ? (prev.data()!.status || 'pending') : 'pending',
+          createdAt: prev.exists ? (prev.data()!.createdAt ?? admin.firestore.FieldValue.serverTimestamp()) : admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+        imported++;
+      }
+      // reconcilia imediatamente contra o relatório (quem já produziu some da fila)
+      let reconciled = 0;
+      try {
+        reconciled = await reconcilePending(await fetchExternalAffiliates());
+      } catch (e) {
+        console.warn('Import: reconciliação adiada (falha ao ler relatório):', (e as any)?.message);
+      }
+      return res.json({ imported, skipped, reconciled, total: rows.length });
+    } catch (error: any) {
+      console.error('Error importing pending affiliates:', error);
+      return res.status(500).json({ error: error.message || 'Erro interno importando pré-cadastros.' });
     }
   });
 
