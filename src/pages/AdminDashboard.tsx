@@ -14,13 +14,13 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { cn, humanizeName } from '../lib/utils';
-import { fetchAffiliates, fetchAllResults, fetchAllResultsByBrand, fetchAllResultsByCampaign, fetchAffiliateConfigs, fetchSpecialAffiliates, buildSubToSpecialConfig, calcAgencyNetProfit, CampaignRow, SpecialAffiliate } from '../services/affiliateService';
+import { fetchAffiliates, fetchAllResults, fetchAllResultsByBrand, fetchAllResultsByCampaign, fetchAffiliateConfigs, fetchSpecialAffiliates, buildSubToSpecialConfig, calcAgencyNetProfit, calcNetProfitByHouse, CampaignRow, SpecialAffiliate } from '../services/affiliateService';
 import DateRangePicker from '../components/DateRangePicker';
 import CampaignBreakdown from '../components/CampaignBreakdown';
 import AffiliatePerformanceChart from '../components/AffiliatePerformanceChart';
 import BrandFilter from '../components/BrandFilter';
 import BrandLogo from '../components/BrandLogo';
-import { getBrandName, uniqueBrands, ALL_BRANDS, getKnownBrandName } from '../lib/brand';
+import { getBrandName, uniqueBrands, ALL_BRANDS, getKnownBrandName, getBrandMeta } from '../lib/brand';
 import { withKnownBrandNames } from '../lib/knownHouses';
 import { DateRange, getDefaultRange } from '../lib/dateRange';
 
@@ -173,27 +173,52 @@ export default function AdminDashboard() {
     [scopedResults, configs, subToSpecialConfig]
   );
 
-  // Por casa (agência) — comissão da casa + funil por marca (groupBy=brand).
-  // Ordenado por comissão. A seção só renderiza com ≥2 casas (ver abaixo).
-  const houseBreakdown = useMemo(
-    () => (Array.isArray(brandRows) ? brandRows : [])
-      .map((r: any) => {
-        const id = String(r.id ?? '');
-        const raw = String(r.label || r.name || r.id || 'Casa');
-        return {
-          id,
-          // casa conhecida → nome canônico do registro; senão humaniza o cru.
-          name: getKnownBrandName(id, raw) ?? humanizeName(raw),
-          commission: Number(r.total_commission) || 0,
-          registrations: Number(r.registrations) || 0,
-          firstDeposits: Number(r.first_deposits) || 0,
-          qualifiedCpa: Number(r.qualified_cpa) || 0,
-          deposit: Number(r.deposit) || 0,
-        };
+  // Por casa (agência) — comissão da casa + funil por marca (groupBy=brand) +
+  // LUCRO LÍQUIDO daquela casa. O funil/comissão vêm do groupBy=brand; o lucro NÃO
+  // dá pra derivar do agregado de marca (cada afiliado tem taxa própria), então é
+  // calculado cruzando afiliado×casa: somamos comissão e repasse das linhas
+  // groupBy=affiliate particionadas pela casa do afiliado (`brandById`), aplicando
+  // a taxa por casa (byBrand via brandId real da OTG) e a regra do especial-pai.
+  // [[boost-net-profit-per-house]] [[boost-net-profit-rule]]
+  const houseBreakdown = useMemo(() => {
+    const base = (Array.isArray(brandRows) ? brandRows : []).map((r: any) => {
+      const id = String(r.id ?? '');
+      const raw = String(r.label || r.name || r.id || 'Casa');
+      return {
+        id,
+        // casa conhecida → nome canônico do registro; senão humaniza o cru.
+        name: getKnownBrandName(id, raw) ?? humanizeName(raw),
+        commission: Number(r.total_commission) || 0,
+        registrations: Number(r.registrations) || 0,
+        firstDeposits: Number(r.first_deposits) || 0,
+        qualifiedCpa: Number(r.qualified_cpa) || 0,
+        deposit: Number(r.deposit) || 0,
+      };
+    });
+
+    // Ponte nome canônico da casa → brandId real (chave do byBrand). Usa as mesmas
+    // linhas de marca, garantindo que o brandId passado ao repasse é o do byBrand.
+    const brandIdByName: Record<string, string> = {};
+    for (const h of base) if (h.name && h.id) brandIdByName[h.name] = h.id;
+
+    // Resolve a casa de um afiliado pelo mapa id→marca, canonizando o nome igual
+    // aos cards e anexando o brandId real para o override por casa.
+    const houseOf = (affiliateId: string) => {
+      const rawBrand = brandById[String(affiliateId)];
+      if (!rawBrand) return null;
+      const key = getKnownBrandName(rawBrand) ?? humanizeName(rawBrand);
+      return { key, brandId: brandIdByName[key] };
+    };
+
+    const np = calcNetProfitByHouse(results, houseOf, configs, subToSpecialConfig);
+
+    return base
+      .map((h) => {
+        const profit = np[h.name];
+        return { ...h, payout: profit?.payout ?? 0, netProfit: profit?.netProfit ?? 0 };
       })
-      .sort((a, b) => b.commission - a.commission),
-    [brandRows]
-  );
+      .sort((a, b) => b.commission - a.commission);
+  }, [brandRows, results, brandById, configs, subToSpecialConfig]);
 
   // Contagem de afiliados respeita o filtro de marca.
   const affiliatesCount = useMemo(
@@ -395,6 +420,18 @@ export default function AdminDashboard() {
                 </div>
                 <p className="text-[10px] uppercase font-bold tracking-widest text-slate-400 dark:text-neutral-500">Comissão (casa)</p>
                 <h4 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight mb-3">R$ {h.commission.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</h4>
+                {/* Lucro líquido da casa = comissão − repasse cruzado afiliado×casa.
+                    Margem da agência só no master (regra do lucro líquido). */}
+                <div className="flex items-center justify-between gap-2 mb-3 px-3 py-2.5 rounded-xl bg-emerald-50/70 dark:bg-emerald-950/20 border border-emerald-200/60 dark:border-emerald-900/40">
+                  <div className="min-w-0">
+                    <p className="text-[9px] uppercase font-bold tracking-widest text-emerald-700/70 dark:text-emerald-400/70">Lucro líquido (casa)</p>
+                    <p className="text-lg font-bold text-emerald-700 dark:text-emerald-400 tracking-tight tabular-nums">R$ {h.netProfit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-[9px] uppercase font-bold tracking-widest text-slate-400 dark:text-neutral-500">Repasse</p>
+                    <p className="text-xs font-semibold text-slate-500 dark:text-neutral-400 tabular-nums">R$ {h.payout.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                  </div>
+                </div>
                 <div className="grid grid-cols-3 gap-2 text-center pt-3 border-t border-slate-100 dark:border-neutral-800">
                   <div><p className="text-sm font-bold text-slate-800 dark:text-white tabular-nums">{h.registrations.toLocaleString('pt-BR')}</p><p className="text-[9px] uppercase font-bold text-slate-400 tracking-wider">Cadastros</p></div>
                   <div><p className="text-sm font-bold text-slate-800 dark:text-white tabular-nums">{h.firstDeposits.toLocaleString('pt-BR')}</p><p className="text-[9px] uppercase font-bold text-slate-400 tracking-wider">FTD</p></div>

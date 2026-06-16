@@ -13,6 +13,7 @@ import {
   aggregateByCampaign,
   buildSubToSpecialConfig,
   calcAgencyNetProfit,
+  calcNetProfitByHouse,
   resolveBrandRates,
   calcAffiliatePayout,
   calcNetProfit,
@@ -282,5 +283,73 @@ describe('calcAgencyNetProfit', () => {
   it('cada afiliado entra uma vez (sem double-count) e tolera entrada vazia', () => {
     expect(calcAgencyNetProfit([], configs, {})).toEqual({ commission: 0, payout: 0, netProfit: 0 });
     expect(calcAgencyNetProfit(null as any, configs, {}).netProfit).toBe(0);
+  });
+});
+
+describe('calcNetProfitByHouse (B1 · lucro por casa, cruzando afiliado×casa)', () => {
+  // 3 afiliados em 2 casas. Repasse = Σ por afiliado da casa (taxa dele × métricas
+  // dele NAQUELA casa) — não derivado do agregado de marca.
+  const results = [
+    { id: 'a1', total_commission: 1000, qualified_cpa: 2, rvs: 0 }, // Superbet
+    { id: 'a2', total_commission: 600, qualified_cpa: 3, rvs: 0 },  // Superbet
+    { id: 'b1', total_commission: 400, qualified_cpa: 1, rvs: 0 },  // SportingBet
+  ];
+  const configs = {
+    a1: { affiliateId: 'a1', cpaValue: 100, revPercentage: 0 },
+    a2: { affiliateId: 'a2', cpaValue: 50, revPercentage: 0 },
+    b1: { affiliateId: 'b1', cpaValue: 80, revPercentage: 0 },
+  } as any;
+  // a1 → casa "super" (brandId sb1); a2 → "super"; b1 → "sport" (brandId sp1).
+  const houseOf = (id: string) =>
+    ({
+      a1: { key: 'Superbet', brandId: 'sb1' },
+      a2: { key: 'Superbet', brandId: 'sb1' },
+      b1: { key: 'SportingBet', brandId: 'sp1' },
+    } as any)[id] ?? null;
+
+  it('particiona comissão e repasse por casa (taxa de cada afiliado)', () => {
+    const np = calcNetProfitByHouse(results, houseOf, configs);
+    // Superbet: comissão 1600; repasse a1 2×100 + a2 3×50 = 200+150 = 350; lucro 1250.
+    expect(np.Superbet).toEqual({ commission: 1600, payout: 350, netProfit: 1250 });
+    // SportingBet: comissão 400; repasse 1×80 = 80; lucro 320.
+    expect(np.SportingBet).toEqual({ commission: 400, payout: 80, netProfit: 320 });
+  });
+
+  it('aplica o override por casa (byBrand) via o brandId real da casa', () => {
+    const withOverride = {
+      ...configs,
+      a1: { affiliateId: 'a1', cpaValue: 100, revPercentage: 0, byBrand: { sb1: { cpaValue: 250, revPercentage: 0 } } },
+    } as any;
+    const np = calcNetProfitByHouse(results, houseOf, withOverride);
+    // a1 passa a 2×250 = 500 (em vez de 200); Superbet repasse 500+150 = 650; lucro 950.
+    expect(np.Superbet.payout).toBe(650);
+    expect(np.Superbet.netProfit).toBe(1600 - 650);
+  });
+
+  it('cobra o sub pela taxa do especial-pai (subToSpecialConfig)', () => {
+    // b1 vira sub de um especial que paga 200/CPA → repasse 1×200 = 200 (não 80).
+    const subMap = { b1: { affiliateId: 'sp', cpaValue: 200, revPercentage: 0 } } as any;
+    const np = calcNetProfitByHouse(results, houseOf, configs, subMap);
+    expect(np.SportingBet.payout).toBe(200);
+    expect(np.SportingBet.netProfit).toBe(200); // 400 − 200
+  });
+
+  it('invariante: Σ das casas == calcAgencyNetProfit (sem overrides)', () => {
+    const np = calcNetProfitByHouse(results, houseOf, configs);
+    const agg = calcAgencyNetProfit(results, configs);
+    const sum = Object.values(np).reduce(
+      (acc, h) => ({ commission: acc.commission + h.commission, payout: acc.payout + h.payout, netProfit: acc.netProfit + h.netProfit }),
+      { commission: 0, payout: 0, netProfit: 0 }
+    );
+    expect(sum).toEqual({ commission: agg.commission, payout: agg.payout, netProfit: agg.netProfit });
+  });
+
+  it('ignora afiliado sem casa conhecida e tolera entrada vazia', () => {
+    const withOrphan = [...results, { id: 'ghost', total_commission: 999, qualified_cpa: 5, rvs: 0 }];
+    const np = calcNetProfitByHouse(withOrphan, houseOf, configs);
+    expect(np.Superbet.commission).toBe(1600); // ghost não entrou em nenhuma casa
+    expect(Object.keys(np).sort()).toEqual(['SportingBet', 'Superbet']);
+    expect(calcNetProfitByHouse([], houseOf, configs)).toEqual({});
+    expect(calcNetProfitByHouse(null as any, houseOf, configs)).toEqual({});
   });
 });

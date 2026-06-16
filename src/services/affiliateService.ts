@@ -624,6 +624,41 @@ export function calcAgencyNetProfit(
   return { commission, payout, netProfit: commission - payout };
 }
 
+// Lucro líquido POR CASA (B1 · detalhamento por casa). Cruza afiliado×casa:
+// cada afiliado pertence a UMA casa (resolvida por `houseOf` a partir do mapa
+// id→marca do caller), então particionamos as linhas groupBy=affiliate por casa
+// e somamos comissão e repasse de cada uma. O repasse NÃO se deriva do agregado
+// de marca (cada afiliado tem taxa própria) — aqui ele é Σ por afiliado da casa
+// (taxa do afiliado × métricas dele NAQUELA casa), com:
+//   - a taxa POR CASA do afiliado quando há override (`byBrand` via `house.brandId`); e
+//   - a regra do especial-pai p/ subs (subToSpecialConfig), igual ao lucro agregado.
+// Invariante: sem overrides por casa, Σ das casas == calcAgencyNetProfit (mesma base,
+// só particionada). [[boost-net-profit-per-house]] [[boost-net-profit-rule]]
+export interface HouseNetProfit {
+  commission: number;
+  payout: number;
+  netProfit: number;
+}
+export function calcNetProfitByHouse(
+  results: any[],
+  houseOf: (affiliateId: string) => { key: string; brandId?: string } | null,
+  configs: Record<string, AffiliateConfig | undefined>,
+  subToSpecialConfig: Record<string, AffiliateConfig> = {}
+): Record<string, HouseNetProfit> {
+  const out: Record<string, HouseNetProfit> = {};
+  for (const r of Array.isArray(results) ? results : []) {
+    const id = String(r?.affiliate_id ?? r?.id ?? '');
+    const house = houseOf(id);
+    if (!house || !house.key) continue; // afiliado sem casa conhecida fica de fora
+    const acc = out[house.key] ?? (out[house.key] = { commission: 0, payout: 0, netProfit: 0 });
+    const cfg = subToSpecialConfig[id] || configs[id];
+    acc.commission += r?.total_commission || 0;
+    acc.payout += calcAffiliatePayout(r, cfg, house.brandId);
+  }
+  for (const k of Object.keys(out)) out[k].netProfit = out[k].commission - out[k].payout;
+  return out;
+}
+
 export async function updateAffiliateStatus(affiliateId: string, status: 'active' | 'inactive'): Promise<any> {
   try {
     const response = await authFetch(`/api/affiliates/${affiliateId}`, {
