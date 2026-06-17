@@ -659,6 +659,58 @@ export function calcNetProfitByHouse(
   return out;
 }
 
+// --- Link de divulgação da agência (/go/:code) -------------------------------
+// O afiliado compartilha boost.../go/:code; o servidor registra o clique e
+// redireciona pro registerUrl real da casa (passando o clickId como subid —
+// subid-ready p/ a atribuição por jogador quando a OTG ligar o postback).
+export interface AffiliateLink {
+  code: string;
+  affiliateId: string;
+  brandId: string | null;
+  registerUrl: string;
+  active: boolean;
+  clicks?: number;
+  botClicks?: number;
+  lastClickAt?: any;
+}
+
+// URL pública compartilhável do link. A casa recebe ?subid no redirect do servidor.
+export function buildGoUrl(code: string, origin?: string): string {
+  const base = origin ?? (typeof window !== 'undefined' ? window.location.origin : '');
+  return `${base}/go/${code}`;
+}
+
+// Cria (ou reusa, idempotente por afiliado×casa) o link de um afiliado. Admin.
+export async function createAffiliateLink(
+  affiliateId: string,
+  registerUrl: string,
+  brandId?: string | null
+): Promise<AffiliateLink> {
+  const response = await authFetch('/api/affiliate-links', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    body: JSON.stringify({ affiliateId, registerUrl, brandId: brandId ?? null }),
+  });
+  if (!response.ok) {
+    const e = await response.json().catch(() => ({}));
+    throw new Error(e.error || e.message || `Erro na API: ${response.status}`);
+  }
+  return response.json();
+}
+
+// Lista os links acessíveis: admin → todos; afiliado → só os dele.
+export async function fetchAffiliateLinks(): Promise<AffiliateLink[]> {
+  try {
+    const response = await authFetch('/api/affiliate-links', { headers: { Accept: 'application/json' } });
+    if (!response.ok) return [];
+    const data = await response.json();
+    return Array.isArray(data?.links) ? data.links : [];
+  } catch (error) {
+    console.error('Error fetching affiliate links:', error);
+    return [];
+  }
+}
+
 export async function updateAffiliateStatus(affiliateId: string, status: 'active' | 'inactive'): Promise<any> {
   try {
     const response = await authFetch(`/api/affiliates/${affiliateId}`, {

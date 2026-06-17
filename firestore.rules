@@ -98,5 +98,20 @@ service cloud.firestore {
     match /payment_profiles/{affiliateId} {
       allow read, write: if isAdmin();
     }
+
+    // Link de divulgação da agência (/go/:code) + tracking de cliques. Tudo é
+    // escrito/lido pelo servidor via Admin SDK (que ignora estas regras): o
+    // /go/:code é público no servidor e o afiliado lê os próprios stats por
+    // endpoint autenticado (/api/affiliate-links). Cliente direto é bloqueado;
+    // admin pode ler direto. subid-ready p/ a atribuição por jogador (postback OTG).
+    match /affiliate_links/{code} {
+      allow read, write: if isAdmin();
+    }
+    match /link_clicks/{clickId} {
+      allow read, write: if isAdmin();
+    }
+    match /link_click_stats/{statId} {
+      allow read, write: if isAdmin();
+    }
   }
 }

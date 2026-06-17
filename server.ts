@@ -8,6 +8,7 @@ import { createServer as createViteServer } from 'vite';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { renderErrorPage } from './errorPage';
+import { isBotUserAgent, appendSubid, clickStatDay } from './src/lib/tracking';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -860,6 +861,147 @@ async function startServer() {
         error: 'Erro interno no servidor proxy', 
         message: error instanceof Error ? error.message : String(error) 
       });
+    }
+  });
+
+  // --- Link de divulgação da agência (tracking + redirect) ------------------
+  // O afiliado compartilha boost.../go/:code em vez da URL da casa. O servidor
+  // registra o clique (subid-ready: gera um clickId e o passa como ?subid pra
+  // casa — quando a OTG ligar o postback, vira atribuição por jogador) e
+  // redireciona pro registerUrl real do afiliado naquela casa. PÚBLICO (sem auth:
+  // qualquer visitante abre). Provado por probe (2026-06-17): o subid sobrevive
+  // até a URL final de cadastro e convive com o `wm` (ref do afiliado).
+  const GO_FALLBACK = process.env.GO_FALLBACK_URL || '/';
+  // Limite generoso só p/ conter abuso de writes (humano não clica 60x/min). Não
+  // usa o publicAuthLimiter (mais estrito) p/ não barrar tráfego legítimo do link.
+  const goLimiter = rateLimit({ windowMs: 60 * 1000, max: 60, standardHeaders: true, legacyHeaders: false });
+  app.get('/go/:code', goLimiter, async (req, res) => {
+    const code = String(req.params.code || '').trim();
+    if (!adminDb || !code) return res.redirect(302, GO_FALLBACK);
+    try {
+      const snap = await adminDb.collection('affiliate_links').doc(code).get();
+      const link = snap.exists ? (snap.data() as any) : null;
+      if (!link || link.active === false || !link.registerUrl) {
+        return res.redirect(302, GO_FALLBACK);
+      }
+
+      const clickId = crypto.randomBytes(12).toString('hex'); // = o subid
+      const ua = String(req.headers['user-agent'] || '');
+      const referer = String(req.headers['referer'] || '');
+      const bot = isBotUserAgent(ua);
+      // LGPD: nunca guardamos o IP cru — só um hash truncado e salgado (dedup/fraude).
+      const ipHash = crypto
+        .createHash('sha256')
+        .update(String(req.ip || '') + (process.env.IP_HASH_SALT || ''))
+        .digest('hex')
+        .slice(0, 16);
+      const day = clickStatDay(new Date());
+      const affiliateId = link.affiliateId ?? null;
+      const brandId = link.brandId ?? null;
+
+      // Clique cru (subid=clickId, p/ casar com o futuro postback) + contador
+      // diário (séries temporais) + totais no próprio link (leitura barata p/ a
+      // dashboard). Await garante o flush antes do redirect no Cloud Run.
+      await Promise.all([
+        adminDb.collection('link_clicks').doc(clickId).set({
+          clickId, code, affiliateId, brandId,
+          isBot: bot,
+          ua: ua.slice(0, 300),
+          referer: referer.slice(0, 300),
+          ipHash,
+          ts: admin.firestore.FieldValue.serverTimestamp(),
+        }),
+        adminDb.collection('link_click_stats').doc(`${code}__${day}`).set({
+          code, affiliateId, brandId, date: day,
+          clicks: admin.firestore.FieldValue.increment(bot ? 0 : 1),
+          botClicks: admin.firestore.FieldValue.increment(bot ? 1 : 0),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true }),
+        adminDb.collection('affiliate_links').doc(code).set({
+          clicks: admin.firestore.FieldValue.increment(bot ? 0 : 1),
+          botClicks: admin.firestore.FieldValue.increment(bot ? 1 : 0),
+          lastClickAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true }),
+      ]);
+
+      res.cookie('boost_click', clickId, {
+        maxAge: 30 * 24 * 60 * 60 * 1000,
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+      });
+      return res.redirect(302, appendSubid(String(link.registerUrl), clickId));
+    } catch (e) {
+      console.error('[go] erro no redirect de clique:', e);
+      return res.redirect(302, GO_FALLBACK);
+    }
+  });
+
+  // Cria (idempotente por afiliado×casa) o link de divulgação de um afiliado.
+  // Admin only. Reusar = link estável (não muda o code já compartilhado).
+  app.post('/api/affiliate-links', requireAdmin, async (req, res) => {
+    if (!adminDb) return res.status(500).json({ error: 'Servidor indisponível' });
+    try {
+      const { affiliateId, brandId, registerUrl } = req.body || {};
+      if (!affiliateId || !registerUrl) {
+        return res.status(400).json({ error: 'affiliateId e registerUrl são obrigatórios' });
+      }
+      const normBrand = brandId != null ? String(brandId) : null;
+      const existing = await adminDb
+        .collection('affiliate_links')
+        .where('affiliateId', '==', String(affiliateId))
+        .where('brandId', '==', normBrand)
+        .limit(1)
+        .get();
+      if (!existing.empty) {
+        const docRef = existing.docs[0].ref;
+        await docRef.set(
+          { registerUrl: String(registerUrl), active: true, updatedAt: admin.firestore.FieldValue.serverTimestamp() },
+          { merge: true }
+        );
+        const fresh = await docRef.get();
+        return res.json({ code: docRef.id, ...(fresh.data() as any) });
+      }
+      const code = crypto.randomBytes(6).toString('base64url'); // ~8 chars URL-safe
+      const payload = {
+        code,
+        affiliateId: String(affiliateId),
+        brandId: normBrand,
+        registerUrl: String(registerUrl),
+        active: true,
+        clicks: 0,
+        botClicks: 0,
+        createdByUid: (req as any).user?.uid ?? null,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      };
+      await adminDb.collection('affiliate_links').doc(code).set(payload);
+      return res.status(201).json({ code, ...payload });
+    } catch (e) {
+      console.error('[affiliate-links] erro ao criar link:', e);
+      return res.status(500).json({ error: 'Erro ao criar o link' });
+    }
+  });
+
+  // Lista os links: admin vê todos; afiliado vê só o(s) dele. Os totais de clique
+  // vêm direto do doc do link (incrementados no /go) — leitura barata.
+  app.get('/api/affiliate-links', requireAuth, async (req, res) => {
+    if (!adminDb) return res.status(500).json({ error: 'Servidor indisponível' });
+    try {
+      const user = (req as any).user;
+      let query: admin.firestore.Query = adminDb.collection('affiliate_links');
+      if (user?.role !== 'admin') {
+        if (!user?.affiliateId) {
+          return res.status(403).json({ error: 'Sua conta não está vinculada a um afiliado.' });
+        }
+        query = query.where('affiliateId', '==', String(user.affiliateId));
+      }
+      const snap = await query.get();
+      const links = snap.docs.map((d) => ({ code: d.id, ...(d.data() as any) }));
+      return res.json({ links });
+    } catch (e) {
+      console.error('[affiliate-links] erro ao listar links:', e);
+      return res.status(500).json({ error: 'Erro ao listar os links' });
     }
   });
 
