@@ -2,7 +2,7 @@ import 'dotenv/config';
 import crypto from 'crypto';
 import express from 'express';
 import helmet from 'helmet';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import admin from 'firebase-admin';
 import { createServer as createViteServer } from 'vite';
 import path from 'path';
@@ -124,7 +124,9 @@ async function startServer() {
     max: 120,
     standardHeaders: true,
     legacyHeaders: false,
-    keyGenerator: (req) => String(req.headers['x-boost-api-key'] || req.ip),
+    // Bucket por API key; sem key, cai no IP NORMALIZADO (ipKeyGenerator mascara
+    // o IPv6 num /56 — senão um usuário IPv6 trocaria de IP e burlaria o limite).
+    keyGenerator: (req) => String(req.headers['x-boost-api-key'] || ipKeyGenerator(String(req.ip || ''))),
     message: { error: 'Limite de requisições excedido. Aguarde um instante.' },
   });
 
