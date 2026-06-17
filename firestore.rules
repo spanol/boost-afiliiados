@@ -113,5 +113,12 @@ service cloud.firestore {
     match /link_click_stats/{statId} {
       allow read, write: if isAdmin();
     }
+
+    // API keys de parceiros externos (M2M). Só o servidor (Admin SDK) emite/valida
+    // — guarda o HASH da key, nunca a key crua. Cliente direto é bloqueado; admin
+    // pode ler p/ gestão (vê só o hash + scopes). Ver server.ts (requirePartner).
+    match /api_partners/{partnerId} {
+      allow read, write: if isAdmin();
+    }
   }
 }

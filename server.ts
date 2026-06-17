@@ -9,6 +9,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { renderErrorPage } from './errorPage';
 import { isBotUserAgent, appendSubid, clickStatDay } from './src/lib/tracking';
+import { pullApprovedRoster, isOtgLinksConfigured } from './otgLinksPull';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -106,6 +107,56 @@ async function startServer() {
     }
     (req as any).user = { uid: decoded.uid, email: decoded.email };
     next();
+  };
+
+  // --- Partner auth (M2M) ---------------------------------------------------
+  // Um parceiro externo NÃO é usuário logado (sem Firebase JWT). Ele se autentica
+  // com uma API key emitida pela PRÓPRIA Boost (≠ x-api-key da OTG), enviada no
+  // header `x-boost-api-key`. Guardamos só o HASH (sha-256) em `api_partners`
+  // (server-only) — a key crua é mostrada uma vez na emissão (scripts/partners).
+  // `scopes` limita o que cada parceiro pode ler ('*' = tudo). Read-only por ora.
+  const hashApiKey = (raw: string) => crypto.createHash('sha256').update(raw).digest('hex');
+
+  // Rate-limit por key (cai no IP como fallback). Generoso p/ integração server-to-server.
+  const partnerLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 120,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => String(req.headers['x-boost-api-key'] || req.ip),
+    message: { error: 'Limite de requisições excedido. Aguarde um instante.' },
+  });
+
+  const requirePartner: express.RequestHandler = async (req, res, next) => {
+    if (!adminApp || !adminDb) return res.status(500).json({ error: 'Firebase Admin não está inicializado.' });
+    const raw = String(req.headers['x-boost-api-key'] || '').trim();
+    if (!raw) return res.status(401).json({ error: 'API key ausente. Envie o header x-boost-api-key.' });
+    try {
+      const snap = await adminDb
+        .collection('api_partners')
+        .where('keyHash', '==', hashApiKey(raw))
+        .limit(1)
+        .get();
+      if (snap.empty) return res.status(401).json({ error: 'API key inválida.' });
+      const doc = snap.docs[0];
+      const data = doc.data() as any;
+      if (data.active === false) return res.status(403).json({ error: 'API key desativada.' });
+      const scopes: string[] = Array.isArray(data.scopes) ? data.scopes.map(String) : [];
+      (req as any).partner = { id: doc.id, name: data.name ?? null, scopes };
+      // best-effort: marca último uso (não bloqueia a resposta)
+      doc.ref.set({ lastUsedAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true }).catch(() => {});
+      next();
+    } catch (error) {
+      console.error('Erro ao validar API key de parceiro:', error);
+      return res.status(500).json({ error: 'Erro ao validar credenciais.' });
+    }
+  };
+
+  // Exige um scope específico (ou '*') no parceiro autenticado.
+  const requireScope = (scope: string): express.RequestHandler => (req, res, next) => {
+    const scopes: string[] = (req as any).partner?.scopes ?? [];
+    if (scopes.includes('*') || scopes.includes(scope)) return next();
+    return res.status(403).json({ error: `Sua chave não tem acesso a "${scope}".` });
   };
   // --------------------------------------------------------------------------
 
@@ -506,6 +557,41 @@ async function startServer() {
     return reconciled;
   };
 
+  // Upsert das linhas de aprovados em `pending_affiliates` (id sintético por
+  // nameKey+casa). Usado tanto pelo import manual (snapshot) quanto pelo pull
+  // automático da OTG — mesma forma de dado, mesma idempotência. NÃO rebaixa um
+  // pendente já reconciliado.
+  const upsertPendingRows = async (rows: any[]): Promise<{ imported: number; skipped: number }> => {
+    if (!adminDb) return { imported: 0, skipped: 0 };
+    let imported = 0;
+    let skipped = 0;
+    for (const r of rows) {
+      const name = String(r?.name ?? '').trim();
+      const house = String(r?.house ?? '').trim();
+      const nameKey = normNameKey(r?.nameKey || name);
+      if (!name || !house || !nameKey) { skipped++; continue; }
+      const id = pendingDocId(nameKey, house);
+      const ref = adminDb.collection('pending_affiliates').doc(id);
+      const prev = await ref.get();
+      await ref.set({
+        id,
+        name,
+        nameKey,
+        house,
+        email: r?.email ?? null,
+        phone: r?.phone ?? null,
+        social: r?.social ?? null,
+        registerUrl: r?.registerUrl ?? null,
+        // não rebaixa um já reconciliado; novo entra como 'pending'
+        status: prev.exists ? (prev.data()!.status || 'pending') : 'pending',
+        createdAt: prev.exists ? (prev.data()!.createdAt ?? admin.firestore.FieldValue.serverTimestamp()) : admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+      imported++;
+    }
+    return { imported, skipped };
+  };
+
   // Sync the external affiliate list into the local `affiliates` collection.
   app.post('/api/affiliates/sync', requireAdmin, async (_req, res) => {
     if (!adminDb) {
@@ -568,31 +654,7 @@ async function startServer() {
       if (!rows) {
         return res.status(400).json({ error: 'Envie { rows: [...] } com as linhas do snapshot.' });
       }
-      let imported = 0;
-      let skipped = 0;
-      for (const r of rows) {
-        const name = String(r?.name ?? '').trim();
-        const house = String(r?.house ?? '').trim();
-        const nameKey = normNameKey(r?.nameKey || name);
-        if (!name || !house || !nameKey) { skipped++; continue; }
-        const id = pendingDocId(nameKey, house);
-        const ref = adminDb.collection('pending_affiliates').doc(id);
-        const prev = await ref.get();
-        await ref.set({
-          id,
-          name,
-          nameKey,
-          house,
-          email: r?.email ?? null,
-          phone: r?.phone ?? null,
-          registerUrl: r?.registerUrl ?? null,
-          // não rebaixa um já reconciliado; novo entra como 'pending'
-          status: prev.exists ? (prev.data()!.status || 'pending') : 'pending',
-          createdAt: prev.exists ? (prev.data()!.createdAt ?? admin.firestore.FieldValue.serverTimestamp()) : admin.firestore.FieldValue.serverTimestamp(),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        }, { merge: true });
-        imported++;
-      }
+      const { imported, skipped } = await upsertPendingRows(rows);
       // reconcilia imediatamente contra o relatório (quem já produziu some da fila)
       let reconciled = 0;
       try {
@@ -604,6 +666,31 @@ async function startServer() {
     } catch (error: any) {
       console.error('Error importing pending affiliates:', error);
       return res.status(500).json({ error: error.message || 'Erro interno importando pré-cadastros.' });
+    }
+  });
+
+  // Puxa o roster de aprovados DIRETO da OTG (Supabase de provisionamento) e faz
+  // o mesmo upsert + reconciliação do import manual — tira o "manual" do snapshot.
+  // Usa as creds do .env (OTG_LINKS_*). Pode ser chamado por um scheduler externo
+  // (cron batendo neste endpoint) ou pelo botão do /admin. Ver otgLinksPull.ts.
+  app.post('/api/pending-affiliates/refresh', requireAdmin, async (_req, res) => {
+    if (!adminDb) return res.status(500).json({ error: 'Firebase Admin não está inicializado.' });
+    if (!isOtgLinksConfigured()) {
+      return res.status(503).json({ error: 'Pull automático não configurado (defina OTG_LINKS_* no .env).' });
+    }
+    try {
+      const roster = await pullApprovedRoster();
+      const { imported, skipped } = await upsertPendingRows(roster.rows);
+      let reconciled = 0;
+      try {
+        reconciled = await reconcilePending(await fetchExternalAffiliates());
+      } catch (e) {
+        console.warn('Refresh: reconciliação adiada (falha ao ler relatório):', (e as any)?.message);
+      }
+      return res.json({ source: 'otg-links', total: roster.total, byHouse: roster.byHouse, imported, skipped, reconciled, fetchedAt: roster.fetchedAt });
+    } catch (error: any) {
+      console.error('Error refreshing pending affiliates from OTG:', error);
+      return res.status(502).json({ error: error.message || 'Erro ao puxar o roster da OTG.' });
     }
   });
 
@@ -1004,6 +1091,114 @@ async function startServer() {
       return res.status(500).json({ error: 'Erro ao listar os links' });
     }
   });
+
+  // === API do PARCEIRO (read-only, M2M) =====================================
+  // Superfície estável e versionada (/api/partner/v1/*) exposta a um parceiro
+  // externo via API key da Boost (requirePartner). Read-only. Envelope fixo
+  // { data, total, generatedAt } p/ não vazar a inconsistência de shape da OTG.
+  // Ver PARTNER-API.md e a memória boost-partner-api.
+  const partnerEnvelope = (data: any[]) => ({ data, total: data.length, generatedAt: new Date().toISOString() });
+  const partnerApi = express.Router();
+  partnerApi.use(partnerLimiter, requirePartner);
+
+  // Afiliados PENDENTES de cadastro (aprovados na OTG, ainda fora do relatório).
+  // É o dado-chave da integração. Filtros opcionais: ?status=pending|reconciled, ?house=.
+  partnerApi.get('/pending-affiliates', requireScope('pending-affiliates'), async (req, res) => {
+    if (!adminDb) return res.status(500).json({ error: 'Servidor indisponível.' });
+    try {
+      const snap = await adminDb.collection('pending_affiliates').get();
+      let rows = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
+      const status = req.query.status ? String(req.query.status) : null;
+      const house = req.query.house ? String(req.query.house).toLowerCase() : null;
+      if (status) rows = rows.filter((r) => String(r.status || 'pending') === status);
+      if (house) rows = rows.filter((r) => String(r.house || '').toLowerCase() === house);
+      return res.json(partnerEnvelope(rows));
+    } catch (error: any) {
+      console.error('[partner-api] pending-affiliates:', error);
+      return res.status(500).json({ error: 'Erro ao listar afiliados pendentes.' });
+    }
+  });
+
+  // Afiliados reconciliados/ativos (espelho do relatório). Inclui registerUrl
+  // (link de cadastro) quando houver — do affiliate_links ou do pré-cadastro.
+  partnerApi.get('/affiliates', requireScope('affiliates'), async (_req, res) => {
+    if (!adminDb) return res.status(500).json({ error: 'Servidor indisponível.' });
+    try {
+      const [affSnap, linkSnap, pendSnap] = await Promise.all([
+        adminDb.collection('affiliates').get(),
+        adminDb.collection('affiliate_links').get(),
+        adminDb.collection('pending_affiliates').where('status', '==', 'reconciled').get(),
+      ]);
+      // mapa affiliateId → registerUrl (link de divulgação tem prioridade; senão o do pré-cadastro)
+      const urlById = new Map<string, string>();
+      for (const d of pendSnap.docs) {
+        const p = d.data() as any;
+        if (p.affiliateId && p.registerUrl) urlById.set(String(p.affiliateId), p.registerUrl);
+      }
+      for (const d of linkSnap.docs) {
+        const l = d.data() as any;
+        if (l.affiliateId && l.registerUrl) urlById.set(String(l.affiliateId), l.registerUrl);
+      }
+      const rows = affSnap.docs.map((d) => {
+        const a = d.data() as any;
+        return {
+          id: d.id,
+          name: a.name ?? null,
+          siteId: a.siteId ?? null,
+          brand: a.brand ?? null,
+          registerUrl: urlById.get(d.id) ?? null,
+        };
+      });
+      return res.json(partnerEnvelope(rows));
+    } catch (error: any) {
+      console.error('[partner-api] affiliates:', error);
+      return res.status(500).json({ error: 'Erro ao listar afiliados.' });
+    }
+  });
+
+  // Resultados/produção agregados (proxy do relatório da OTG). Query obrigatória:
+  // ?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD ; opcional ?groupBy=affiliate|brand|date|campaign
+  // (default affiliate) e ?affiliateIds=a,b (expandido p/ o formato repetido da OTG).
+  partnerApi.get('/results', requireScope('results'), async (req, res) => {
+    const BASE_URL = process.env.VITE_AFFILIATE_API_BASE_URL || 'https://affiliate-api-prd.partnersotg.com';
+    const apiKey = process.env.AFFILIATE_API_KEY;
+    if (!apiKey) return res.status(500).json({ error: 'Chave de API externa não configurada.' });
+    const startDate = req.query.startDate ? String(req.query.startDate) : '';
+    const endDate = req.query.endDate ? String(req.query.endDate) : '';
+    if (!startDate || !endDate) {
+      return res.status(400).json({ error: 'startDate e endDate são obrigatórios (YYYY-MM-DD).' });
+    }
+    try {
+      const params = new URLSearchParams();
+      params.set('startDate', startDate);
+      params.set('endDate', endDate);
+      params.set('groupBy', req.query.groupBy ? String(req.query.groupBy) : 'affiliate');
+      // a OTG não aceita affiliateIds CSV — expande p/ parâmetro repetido.
+      if (req.query.affiliateIds) {
+        String(req.query.affiliateIds).split(',').map((s) => s.trim()).filter(Boolean)
+          .forEach((affId) => params.append('affiliateIds', affId));
+      }
+      const resp = await fetch(`${BASE_URL}/api/v2/external/results?${params.toString()}`, {
+        headers: { 'x-api-key': apiKey, Accept: 'application/json', 'User-Agent': 'AgenciaBoost-App/1.0' },
+      });
+      const text = await resp.text();
+      let body: any = null;
+      try { body = text ? JSON.parse(text) : null; } catch { body = null; }
+      if (!resp.ok) {
+        const requestId = crypto.randomBytes(8).toString('hex');
+        console.error(`[partner-api] ${requestId} results upstream ${resp.status}:`, text);
+        return res.status(502).json({ error: 'Falha ao consultar o relatório.', code: body?.code, requestId });
+      }
+      const list = body?.data?.data ?? body?.data ?? body ?? [];
+      return res.json(partnerEnvelope(Array.isArray(list) ? list : []));
+    } catch (error: any) {
+      console.error('[partner-api] results:', error);
+      return res.status(500).json({ error: 'Erro ao consultar resultados.' });
+    }
+  });
+
+  app.use('/api/partner/v1', partnerApi);
+  // ==========================================================================
 
   // Block requests to dotfiles / sensitive paths (e.g. /.git, /.env) with a branded
   // page. In dev the Vite fs middleware would otherwise return a raw 403 that leaks
