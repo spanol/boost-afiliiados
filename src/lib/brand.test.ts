@@ -55,7 +55,7 @@ describe('registro de casas (B6 · logo + casa conhecida)', () => {
   it('resolve por nome (case-insensitive) e por slug', () => {
     expect(getBrandMeta('superbet')?.slug).toBe('superbet');
     expect(getBrandMeta('SPORTINGBET')?.name).toBe('SportingBet');
-    expect(getBrandMeta('sportingbet')?.id).toBe('clsportingbet000001');
+    expect(getBrandMeta('sportingbet')?.id).toBe('cmm5dhdqm000e19b58dqc549a');
   });
 
   it('devolve null p/ casa desconhecida ou entrada vazia', () => {
@@ -65,7 +65,7 @@ describe('registro de casas (B6 · logo + casa conhecida)', () => {
   });
 
   it('getBrandLogo devolve o caminho do asset, null se desconhecida', () => {
-    expect(getBrandLogo('clsuperbet000001')).toBe('/brands/superbet.svg');
+    expect(getBrandLogo('clsuperbet000001')).toBe('/brands/superbet.png');
     expect(getBrandLogo('Betano')).toBeNull();
   });
 

@@ -13,9 +13,10 @@ describe('BrandFilter', () => {
     expect(c1).toBeEmptyDOMElement();
   });
 
-  it('aparece com ≥2 marcas, mostrando "Todas" + uma pílula por casa', () => {
+  it('aparece com ≥2 marcas, mostrando "Todas" + uma opção por casa ao abrir', () => {
     render(<BrandFilter brands={['Superbet', 'SportingBet']} value={ALL_BRANDS} onChange={() => {}} />);
-    expect(screen.getByText('Todas as marcas')).toBeInTheDocument();
+    // Gatilho fechado mostra "Todas as casas"; as opções só surgem ao abrir.
+    fireEvent.click(screen.getByText('Todas as casas'));
     expect(screen.getByText('Superbet')).toBeInTheDocument();
     expect(screen.getByText('SportingBet')).toBeInTheDocument();
   });
@@ -23,14 +24,16 @@ describe('BrandFilter', () => {
   it('emite o nome da casa selecionada ao clicar', () => {
     const onChange = vi.fn();
     render(<BrandFilter brands={['Superbet', 'SportingBet']} value={ALL_BRANDS} onChange={onChange} />);
+    fireEvent.click(screen.getByText('Todas as casas')); // abre o dropdown
     fireEvent.click(screen.getByText('SportingBet'));
     expect(onChange).toHaveBeenCalledWith('SportingBet');
   });
 
-  it('volta para todas as marcas ao clicar em "Todas"', () => {
+  it('volta para todas as casas ao clicar em "Todas"', () => {
     const onChange = vi.fn();
     render(<BrandFilter brands={['Superbet', 'SportingBet']} value="SportingBet" onChange={onChange} />);
-    fireEvent.click(screen.getByText('Todas as marcas'));
+    fireEvent.click(screen.getByText('SportingBet')); // gatilho mostra a casa atual; abre o dropdown
+    fireEvent.click(screen.getByText('Todas as casas'));
     expect(onChange).toHaveBeenCalledWith(ALL_BRANDS);
   });
 });
