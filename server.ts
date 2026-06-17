@@ -221,6 +221,46 @@ async function startServer() {
     }
   });
 
+  // Admin · grava o registro de afiliado especial (special_affiliates) E espelha a
+  // flag `isSpecial` em TODO login vinculado ao affiliateId. Resolver o uid PELO
+  // affiliateId aqui (em vez de exigir o client passar o userUid) elimina o bug
+  // recorrente do "especial ativo sem acesso à rede": antes a flag só pousava se a
+  // UI tivesse o userUid em mãos, e o fluxo de convite (accept-invite) nunca a
+  // setava — então o especial era roteado pra própria view, sem a /network.
+  app.post('/api/special-affiliates', requireAdmin, async (req, res) => {
+    if (!adminDb) return res.status(500).json({ error: 'Firebase Admin não está inicializado.' });
+    try {
+      const { affiliateId, active, subAffiliateIds } = req.body ?? {};
+      const affId = affiliateId != null ? String(affiliateId).trim() : '';
+      if (!affId) return res.status(400).json({ error: 'affiliateId é obrigatório.' });
+      const isActive = active === true;
+      const subs = Array.isArray(subAffiliateIds) ? subAffiliateIds.map((s: any) => String(s)) : [];
+
+      await adminDb.collection('special_affiliates').doc(affId).set({
+        active: isActive,
+        subAffiliateIds: isActive ? subs : [],
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+
+      // Espelha isSpecial em todo user com este affiliateId (normalmente 1; batch
+      // por segurança). Promoção → true; rebaixamento → false.
+      const usersSnap = await adminDb.collection('users').where('affiliateId', '==', affId).get();
+      if (!usersSnap.empty) {
+        const batch = adminDb.batch();
+        usersSnap.forEach((d) => batch.set(d.ref, {
+          isSpecial: isActive,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true }));
+        await batch.commit();
+      }
+
+      return res.json({ affiliateId: affId, active: isActive, subAffiliateIds: isActive ? subs : [], linkedUsers: usersSnap.size });
+    } catch (error: any) {
+      console.error('Error saving special affiliate:', error);
+      return res.status(500).json({ error: error.message || 'Erro interno salvando afiliado especial.' });
+    }
+  });
+
   // B4 · Dados de pagamento do afiliado (PIX + dados de NF). Preenchidos pelo
   // próprio afiliado; o admin apenas visualiza. São PII → coleção server-only
   // (payment_profiles), gravada via Admin SDK. O afiliado lê/grava o PRÓPRIO
@@ -787,6 +827,13 @@ async function startServer() {
 
       const normalizedEmail = String(email).trim().toLowerCase();
       const affiliateName = invite.affiliateName || normalizedEmail;
+      const affId = String(invite.affiliateId);
+
+      // Se este afiliado já foi marcado como especial ANTES de aceitar o convite,
+      // espelha isSpecial no doc novo — senão ele se cadastra sem acesso à /network
+      // (bug recorrente do especial sem flag). Resolvido pelo affiliateId do convite.
+      const specialSnap = await adminDb.collection('special_affiliates').doc(affId).get();
+      const isSpecial = specialSnap.exists && specialSnap.data()?.active === true;
 
       let userRecord: admin.auth.UserRecord;
       try {
@@ -807,7 +854,8 @@ async function startServer() {
         name: affiliateName,
         email: normalizedEmail,
         role: 'client',
-        affiliateId: String(invite.affiliateId),
+        affiliateId: affId,
+        isSpecial,
         phone: normalizedPhone,
         instagram: normalizedInstagram,
         mustChangePassword: false,

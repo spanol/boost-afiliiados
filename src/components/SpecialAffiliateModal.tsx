@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
 import { Crown, X, Save, Loader2, Search } from 'lucide-react';
 import { cn } from '../lib/utils';
-import { saveSpecialAffiliate, setUserSpecialFlag, SpecialAffiliate } from '../services/affiliateService';
+import { saveSpecialAffiliate, SpecialAffiliate } from '../services/affiliateService';
 import { useToast } from '../contexts/ToastContext';
 
 interface AffiliateLite {
@@ -58,14 +58,13 @@ export default function SpecialAffiliateModal({ affiliate, allAffiliates, specia
   const handleSave = async () => {
     setSaving(true);
     try {
+      // O servidor grava o registro E espelha isSpecial no login vinculado
+      // (resolvido pelo affiliateId) — não depende mais do userUid em mãos.
       await saveSpecialAffiliate({
         affiliateId: espId,
         active,
         subAffiliateIds: active ? subs : [],
       });
-      if (affiliate.userUid) {
-        await setUserSpecialFlag(affiliate.userUid, active);
-      }
       push({ type: 'success', message: active ? 'Afiliado especial salvo.' : 'Afiliado especial desativado.' });
       onSaved?.();
       onClose();

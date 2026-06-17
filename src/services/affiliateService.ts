@@ -176,17 +176,24 @@ export async function fetchSpecialAffiliates(): Promise<Record<string, SpecialAf
   }
 }
 
+// Grava o registro de afiliado especial VIA SERVIDOR — o endpoint escreve
+// special_affiliates E espelha a flag isSpecial em todo login vinculado ao
+// affiliateId (resolvido no servidor). Não depende mais do client passar o
+// userUid: isso eliminava o flag quando o login não estava resolvido no momento
+// da promoção (especial ativo sem acesso à /network).
 export async function saveSpecialAffiliate(data: SpecialAffiliate): Promise<void> {
-  try {
-    const ref = doc(db, 'special_affiliates', String(data.affiliateId));
-    await setDoc(ref, {
+  const response = await authFetch('/api/special-affiliates', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({
+      affiliateId: String(data.affiliateId),
       active: !!data.active,
       subAffiliateIds: (data.subAffiliateIds ?? []).map(String),
-      updatedAt: serverTimestamp(),
-    }, { merge: true });
-  } catch (error) {
-    console.error('Error saving special affiliate:', error);
-    throw error;
+    }),
+  });
+  if (!response.ok) {
+    const e = await response.json().catch(() => ({}));
+    throw new Error(e.error || e.message || `Erro: ${response.status}`);
   }
 }
 
@@ -249,18 +256,6 @@ export async function fetchPaymentProfile(affiliateId: string): Promise<PaymentP
     throw new Error(e.error || e.message || `Erro: ${response.status}`);
   }
   return response.json();
-}
-
-// Espelha a flag isSpecial no doc do usuário (conveniência p/ roteamento — Fase 3).
-export async function setUserSpecialFlag(uid: string, isSpecial: boolean): Promise<void> {
-  if (!uid) return;
-  try {
-    const ref = doc(db, 'users', String(uid));
-    await setDoc(ref, { isSpecial, updatedAt: serverTimestamp() }, { merge: true });
-  } catch (error) {
-    console.error('Error setting user special flag:', error);
-    throw error;
-  }
 }
 
 // Admin · vincula um login EXISTENTE (por e-mail) a um afiliado, gravando
