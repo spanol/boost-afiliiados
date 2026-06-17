@@ -18,6 +18,7 @@ import SpecialDashboard from './pages/SpecialDashboard';
 import SpecialSubAffiliates from './pages/SpecialSubAffiliates';
 import SpecialAffiliatesList from './pages/SpecialAffiliatesList';
 import Financeiro from './pages/Financeiro';
+import PartnerApiExplorer from './pages/PartnerApiExplorer';
 import NotFound from './pages/NotFound';
 import DashboardLayout from './components/DashboardLayout';
 
@@ -113,6 +114,11 @@ export default function App() {
             <Route path="/special-affiliates" element={
               <ProtectedRoute role="admin">
                 <SpecialAffiliatesList />
+              </ProtectedRoute>
+            } />
+            <Route path="/parceiros-api" element={
+              <ProtectedRoute role="admin">
+                <PartnerApiExplorer />
               </ProtectedRoute>
             } />
             <Route path="/affiliates/:id" element={<AffiliateDetails />} />

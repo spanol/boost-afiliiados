@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   projectPartnerResult,
   projectPartnerResults,
+  collectFields,
+  findMonetaryFields,
   PARTNER_RESULT_MONETARY_FIELDS,
 } from './partnerResults';
 
@@ -78,5 +80,23 @@ describe('projectPartnerResults (lista)', () => {
     ]);
     expect(projectPartnerResults(null)).toEqual([]);
     expect(projectPartnerResults(undefined)).toEqual([]);
+  });
+});
+
+describe('collectFields / findMonetaryFields (auditoria do explorer)', () => {
+  it('collectFields reúne as chaves distintas, ordenadas', () => {
+    const rows = [{ id: 'a', registrations: 1 }, { id: 'b', qualified_cpa: 2 }];
+    expect(collectFields(rows)).toEqual(['id', 'qualified_cpa', 'registrations']);
+    expect(collectFields(null)).toEqual([]);
+  });
+
+  it('findMonetaryFields acusa valores quando (e só quando) existem', () => {
+    expect(findMonetaryFields([{ id: 'a', registrations: 1, first_deposits: 2 }])).toEqual([]);
+    expect(findMonetaryFields([{ id: 'a', total_commission: 9, deposit: 5 }]).sort()).toEqual(['deposit', 'total_commission']);
+  });
+
+  it('a saída projetada NUNCA acusa monetário (não-regressão)', () => {
+    const raw = [{ id: 'a', registrations: 1, total_commission: 99, cpa: 9, deposit: 5 }];
+    expect(findMonetaryFields(projectPartnerResults(raw))).toEqual([]);
   });
 });

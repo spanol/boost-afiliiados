@@ -6,6 +6,28 @@ uma **API key emitida pela Boost**, não tem conta nem acessa o app.
 
 Base: `https://<host-da-boost>/api/partner/v1`
 
+## Rotas abertas (resumo)
+
+| Método | Rota | Scope | Retorna |
+|--------|------|-------|---------|
+| GET | `/pending-affiliates` | `pending-affiliates` | Aprovados na OTG aguardando produção (dado-chave) |
+| GET | `/affiliates` | `affiliates` | Reconciliados/ativos (id, nome, marca, link) |
+| GET | `/results` | `results` | Produção agregada — **só contagem, nada de R$** |
+
+Todas read-only, autenticadas por API key da Boost, com envelope fixo `{ data, total, generatedAt }`.
+
+> **Explorer interno:** o admin tem em `/parceiros-api` (sidebar → "API Parceiros") um
+> painel para disparar essas rotas, ver a resposta e **auditar os campos** — confirma
+> visualmente que só saem os dados liberados (sem valores monetários).
+
+## O que NÃO é exposto
+
+- **Nenhum valor monetário (R$)** em `/results`: `total_commission`, `cpa` (R$), `rvs`,
+  `deposit` (R$), comissão, repasse, lucro — removidos no servidor por whitelist
+  (`src/lib/partnerResults.ts`). Decisão do Carlos (2026-06-17).
+- Endpoints de escrita, configuração, taxas/`affiliate_configs`, lucro líquido da agência,
+  e qualquer rota interna do app (essas exigem login Firebase, fora desta superfície).
+
 ## Autenticação
 
 Toda requisição envia a key no header:

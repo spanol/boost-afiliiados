@@ -43,3 +43,22 @@ export function projectPartnerResult(row: any): Record<string, any> {
 export function projectPartnerResults(rows: any): Record<string, any>[] {
   return (Array.isArray(rows) ? rows : []).map(projectPartnerResult);
 }
+
+// --- Auditoria (usada pelo explorer p/ PROVAR a resposta visualmente) ---------
+
+// Todos os campos distintos presentes nas linhas (ordenados) — p/ listar na UI.
+export function collectFields(rows: any): string[] {
+  const set = new Set<string>();
+  for (const row of Array.isArray(rows) ? rows : []) {
+    if (row && typeof row === 'object' && !Array.isArray(row)) {
+      for (const k of Object.keys(row)) set.add(k);
+    }
+  }
+  return Array.from(set).sort();
+}
+
+// Quais campos MONETÁRIOS (proibidos) aparecem nas linhas. Vazio = limpo. É o
+// sinal que o explorer usa p/ mostrar verde ("só contagem/identidade") ou vermelho.
+export function findMonetaryFields(rows: any): string[] {
+  return collectFields(rows).filter((k) => PARTNER_RESULT_MONETARY_FIELDS.includes(k));
+}
