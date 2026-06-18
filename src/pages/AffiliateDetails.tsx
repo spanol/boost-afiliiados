@@ -625,7 +625,7 @@ export default function AffiliateDetails() {
                         <h2 className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white break-words">
                           R$ {totalCommission.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </h2>
-                        <div className="flex items-center gap-1 text-brand font-bold text-sm bg-brand/5 px-2 py-0.5 rounded-lg">
+                        <div className="flex items-center gap-1 text-brand dark:text-white font-bold text-sm bg-brand/5 dark:bg-white/10 px-2 py-0.5 rounded-lg">
                           <TrendingUp size={16} /> Configurado
                         </div>
                       </div>
@@ -726,8 +726,8 @@ export default function AffiliateDetails() {
                         <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Primeiros Depósitos</p>
                         <h4 className="text-4xl font-black text-slate-900 dark:text-white tracking-tighter">{row.first_deposits || 0}</h4>
                         <div className="flex items-center gap-1.5 mt-2">
-                          <div className="w-1.5 h-1.5 rounded-full bg-brand animate-pulse"></div>
-                          <p className="text-[10px] font-bold text-brand uppercase tracking-widest leading-none">Contas Ativas</p>
+                          <div className="w-1.5 h-1.5 rounded-full bg-brand dark:bg-white animate-pulse"></div>
+                          <p className="text-[10px] font-bold text-brand dark:text-white uppercase tracking-widest leading-none">Contas Ativas</p>
                         </div>
                       </div>
                     </motion.div>
@@ -836,7 +836,7 @@ export default function AffiliateDetails() {
 
                   {/* Evolução diária (dados reais da API externa, groupBy=date) */}
                   <div className="bg-white dark:bg-neutral-900 border border-slate-100 dark:border-neutral-800 rounded-3xl flex flex-col shadow-sm overflow-hidden mb-20">
-                    <div className="p-6 border-b border-slate-50 dark:border-neutral-800 flex justify-between items-center bg-slate-50/50">
+                    <div className="p-6 border-b border-slate-50 dark:border-neutral-800 flex justify-between items-center bg-slate-50/50 dark:bg-neutral-800/30">
                       <h3 className="font-black text-xs text-slate-800 dark:text-white uppercase tracking-widest">Evolução Diária</h3>
                       <div className="flex items-center gap-2 px-3 py-1 bg-slate-100 dark:bg-neutral-800 rounded-lg text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                         Cadastros · Comissão
@@ -848,7 +848,7 @@ export default function AffiliateDetails() {
                   {/* Lista de Clientes — desativada: a API de afiliados não expõe dados por
                       cliente/jogador. Mantida para reativar caso surja essa fonte de dados.
                   <div className="bg-white dark:bg-neutral-900 border border-slate-100 dark:border-neutral-800 rounded-3xl flex flex-col shadow-sm overflow-hidden mb-20">
-                    <div className="p-6 border-b border-slate-50 dark:border-neutral-800 flex justify-between items-center bg-slate-50/50">
+                    <div className="p-6 border-b border-slate-50 dark:border-neutral-800 flex justify-between items-center bg-slate-50/50 dark:bg-neutral-800/30">
                       <h3 className="font-black text-xs text-slate-800 dark:text-white uppercase tracking-widest">Lista de Clientes</h3>
                       <div className="flex items-center gap-2 px-3 py-1 bg-slate-100 dark:bg-neutral-800 rounded-lg text-[10px] font-bold text-slate-400 uppercase tracking-widest">
                         Filtrar por Casa
