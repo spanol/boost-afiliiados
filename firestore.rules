@@ -114,6 +114,15 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    // Backoffice de casas (betting houses). Registro próprio das casas (nome/logo/
+    // brandId/registerUrlTemplate), gerido pelo admin via /casas. Escrito/lido pelo
+    // servidor (Admin SDK, que ignora estas regras); o afiliado lê pelo GET
+    // autenticado (/api/houses) p/ logos/filtros. Cliente direto é bloqueado; admin
+    // pode ler/gerir direto.
+    match /houses/{houseId} {
+      allow read, write: if isAdmin();
+    }
+
     // API keys de parceiros externos (M2M). Só o servidor (Admin SDK) emite/valida
     // — guarda o HASH da key, nunca a key crua. Cliente direto é bloqueado; admin
     // pode ler p/ gestão (vê só o hash + scopes). Ver server.ts (requirePartner).

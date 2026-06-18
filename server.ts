@@ -9,6 +9,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { renderErrorPage } from './errorPage';
 import { isBotUserAgent, appendSubid, clickStatDay } from './src/lib/tracking';
+import { DEFAULT_BRANDS } from './src/lib/brand';
 import { projectPartnerResults } from './src/lib/partnerResults';
 import { pullApprovedRoster, isOtgLinksConfigured } from './otgLinksPull';
 
@@ -18,12 +19,15 @@ const __dirname = path.dirname(__filename);
 let adminApp: admin.app.App | null = null;
 let adminDb: admin.firestore.Firestore | null = null;
 
+// Bucket do Storage (logos das casas). Default = bucket do projeto; override por env.
+const STORAGE_BUCKET = process.env.FIREBASE_STORAGE_BUCKET || 'agencia-boost-app.firebasestorage.app';
+
 try {
   if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
     const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
-    adminApp = admin.initializeApp({ credential: admin.credential.cert(serviceAccount) });
+    adminApp = admin.initializeApp({ credential: admin.credential.cert(serviceAccount), storageBucket: STORAGE_BUCKET });
   } else {
-    adminApp = admin.initializeApp();
+    adminApp = admin.initializeApp({ storageBucket: STORAGE_BUCKET });
   }
   adminDb = adminApp.firestore();
   console.log('Firebase Admin initialized');
@@ -41,6 +45,12 @@ async function startServer() {
   // Referrer-Policy, HSTS, etc.) já entram. COEP off p/ não bloquear recursos
   // cross-origin legítimos (avatares, storage).
   app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
+
+  // O backoffice de casas envia a logo em base64 no corpo — precisa de um teto
+  // maior. Parser dedicado ANTES do global (escopado em /api/houses): o global de
+  // 32kb vira no-op p/ esse path (express.json não re-parseia req._body). Demais
+  // rotas seguem no limite apertado.
+  app.use('/api/houses', express.json({ limit: '4mb' }));
 
   // SECURITY (LOW): limite explícito do corpo JSON (evita payloads gigantes).
   app.use(express.json({ limit: '32kb' }));
@@ -1140,6 +1150,163 @@ async function startServer() {
     } catch (e) {
       console.error('[affiliate-links] erro ao listar links:', e);
       return res.status(500).json({ error: 'Erro ao listar os links' });
+    }
+  });
+
+  // === Backoffice de CASAS (betting houses) =================================
+  // Fonte de verdade do registro de casas (substitui o KNOWN_BRANDS hardcoded):
+  // o admin cria/edita casas em /casas. Tudo via Admin SDK; o cliente nunca toca
+  // `houses` direto (rules server-only) — lê pelo GET autenticado p/ logos/filtros.
+  const slugifyHouse = (s: string) =>
+    String(s ?? '')
+      .normalize('NFD').replace(/\p{Diacritic}/gu, '')
+      .toLowerCase().trim()
+      .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+
+  // Sobe a logo (data URL base64) pro Storage e devolve a URL de download. Usa
+  // download-token (compatível com uniform bucket-level access — makePublic falha).
+  const uploadHouseLogo = async (slug: string, dataUrl: string): Promise<string> => {
+    const m = /^data:(image\/(png|jpe?g|webp|svg\+xml));base64,(.+)$/i.exec(String(dataUrl));
+    if (!m) throw new Error('Logo inválida (envie PNG, JPG, WEBP ou SVG).');
+    const mime = m[1];
+    const ext = m[2].toLowerCase() === 'jpeg' ? 'jpg' : m[2].toLowerCase().replace('svg+xml', 'svg');
+    const buffer = Buffer.from(m[3], 'base64');
+    if (buffer.length > 2 * 1024 * 1024) throw new Error('Logo muito grande (máx. 2MB).');
+    const bucket = admin.storage().bucket();
+    const filePath = `house-logos/${slug}-${Date.now()}.${ext}`;
+    const token = crypto.randomUUID();
+    await bucket.file(filePath).save(buffer, {
+      resumable: false,
+      contentType: mime,
+      metadata: { cacheControl: 'public,max-age=31536000', metadata: { firebaseStorageDownloadTokens: token } },
+    });
+    return `https://firebasestorage.googleapis.com/v0/b/${bucket.name}/o/${encodeURIComponent(filePath)}?alt=media&token=${token}`;
+  };
+
+  // Semeia as casas-semente (DEFAULT_BRANDS) na 1ª vez que a coleção está vazia,
+  // p/ produção nunca ficar sem Superbet/SportingBet. Idempotente.
+  const ensureHousesSeeded = async () => {
+    if (!adminDb) return;
+    const snap = await adminDb.collection('houses').limit(1).get();
+    if (!snap.empty) return;
+    const batch = adminDb.batch();
+    DEFAULT_BRANDS.forEach((b, i) => {
+      batch.set(adminDb!.collection('houses').doc(b.slug), {
+        slug: b.slug,
+        name: b.name,
+        brandId: b.id ?? null,
+        logo: b.logo ?? null,
+        registerUrlTemplate: null,
+        active: b.active !== false,
+        order: i,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    });
+    await batch.commit();
+  };
+
+  const houseFromDoc = (d: admin.firestore.DocumentSnapshot) => {
+    const data = (d.data() as any) || {};
+    return {
+      id: d.id,
+      slug: data.slug ?? d.id,
+      name: data.name ?? d.id,
+      brandId: data.brandId ?? null,
+      logo: data.logo ?? null,
+      registerUrlTemplate: data.registerUrlTemplate ?? null,
+      active: data.active !== false,
+      order: Number.isFinite(Number(data.order)) ? Number(data.order) : 0,
+    };
+  };
+
+  // Lista as casas (qualquer signed-in: o afiliado precisa p/ logos/filtros).
+  app.get('/api/houses', requireAuth, async (_req, res) => {
+    if (!adminDb) return res.status(500).json({ error: 'Servidor indisponível' });
+    try {
+      await ensureHousesSeeded();
+      const snap = await adminDb.collection('houses').get();
+      const houses = snap.docs
+        .map(houseFromDoc)
+        .sort((a, b) => a.order - b.order || a.name.localeCompare(b.name, 'pt-BR'));
+      return res.json({ houses });
+    } catch (e) {
+      console.error('[houses] erro ao listar:', e);
+      return res.status(500).json({ error: 'Erro ao listar as casas' });
+    }
+  });
+
+  // Cria uma casa (admin). doc id = slug (único).
+  app.post('/api/houses', requireAdmin, async (req, res) => {
+    if (!adminDb) return res.status(500).json({ error: 'Servidor indisponível' });
+    try {
+      const { name, brandId, registerUrlTemplate, active, order, logoBase64 } = req.body || {};
+      const cleanName = String(name ?? '').trim();
+      if (!cleanName) return res.status(400).json({ error: 'O nome da casa é obrigatório.' });
+      const slug = slugifyHouse(req.body?.slug || cleanName);
+      if (!slug) return res.status(400).json({ error: 'Slug inválido.' });
+      const ref = adminDb.collection('houses').doc(slug);
+      if ((await ref.get()).exists) {
+        return res.status(409).json({ error: `Já existe uma casa com o slug "${slug}".` });
+      }
+      let logo: string | null = null;
+      if (logoBase64) logo = await uploadHouseLogo(slug, String(logoBase64));
+      await ref.set({
+        slug,
+        name: cleanName,
+        brandId: brandId ? String(brandId) : null,
+        logo,
+        registerUrlTemplate: registerUrlTemplate ? String(registerUrlTemplate) : null,
+        active: active !== false,
+        order: Number.isFinite(Number(order)) ? Number(order) : 0,
+        createdByUid: (req as any).user?.uid ?? null,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+      return res.status(201).json(houseFromDoc(await ref.get()));
+    } catch (e: any) {
+      console.error('[houses] erro ao criar:', e);
+      return res.status(500).json({ error: e?.message || 'Erro ao criar a casa' });
+    }
+  });
+
+  // Atualiza uma casa (admin). Patch parcial; logoBase64 troca a logo.
+  app.patch('/api/houses/:id', requireAdmin, async (req, res) => {
+    if (!adminDb) return res.status(500).json({ error: 'Servidor indisponível' });
+    try {
+      const ref = adminDb.collection('houses').doc(String(req.params.id));
+      const snap = await ref.get();
+      if (!snap.exists) return res.status(404).json({ error: 'Casa não encontrada.' });
+      const body = req.body || {};
+      const patch: any = { updatedAt: admin.firestore.FieldValue.serverTimestamp() };
+      if (body.name != null) {
+        const cleanName = String(body.name).trim();
+        if (!cleanName) return res.status(400).json({ error: 'O nome da casa é obrigatório.' });
+        patch.name = cleanName;
+      }
+      if (body.brandId !== undefined) patch.brandId = body.brandId ? String(body.brandId) : null;
+      if (body.registerUrlTemplate !== undefined) patch.registerUrlTemplate = body.registerUrlTemplate ? String(body.registerUrlTemplate) : null;
+      if (body.active !== undefined) patch.active = body.active !== false;
+      if (body.order !== undefined && Number.isFinite(Number(body.order))) patch.order = Number(body.order);
+      if (body.logoBase64) patch.logo = await uploadHouseLogo((snap.data() as any)?.slug ?? ref.id, String(body.logoBase64));
+      else if (body.logo === null) patch.logo = null;
+      await ref.set(patch, { merge: true });
+      return res.json(houseFromDoc(await ref.get()));
+    } catch (e: any) {
+      console.error('[houses] erro ao atualizar:', e);
+      return res.status(500).json({ error: e?.message || 'Erro ao atualizar a casa' });
+    }
+  });
+
+  // Remove uma casa (admin).
+  app.delete('/api/houses/:id', requireAdmin, async (req, res) => {
+    if (!adminDb) return res.status(500).json({ error: 'Servidor indisponível' });
+    try {
+      await adminDb.collection('houses').doc(String(req.params.id)).delete();
+      return res.json({ ok: true });
+    } catch (e) {
+      console.error('[houses] erro ao remover:', e);
+      return res.status(500).json({ error: 'Erro ao remover a casa' });
     }
   });
 
