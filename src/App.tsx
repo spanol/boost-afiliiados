@@ -19,6 +19,7 @@ import SpecialSubAffiliates from './pages/SpecialSubAffiliates';
 import SpecialAffiliatesList from './pages/SpecialAffiliatesList';
 import Financeiro from './pages/Financeiro';
 import PartnerApiExplorer from './pages/PartnerApiExplorer';
+import OtgRoster from './pages/OtgRoster';
 import NotFound from './pages/NotFound';
 import DashboardLayout from './components/DashboardLayout';
 
@@ -119,6 +120,11 @@ export default function App() {
             <Route path="/parceiros-api" element={
               <ProtectedRoute role="admin">
                 <PartnerApiExplorer />
+              </ProtectedRoute>
+            } />
+            <Route path="/roster-otg" element={
+              <ProtectedRoute role="admin">
+                <OtgRoster />
               </ProtectedRoute>
             } />
             <Route path="/affiliates/:id" element={<AffiliateDetails />} />

@@ -15,7 +15,8 @@ import {
   Users,
   Crown,
   Wallet,
-  Plug
+  Plug,
+  Database
 } from 'lucide-react';
 import { cn, humanizeName } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -64,6 +65,7 @@ export default function DashboardLayout() {
           : []),
         ...(profile?.role === 'admin' ? [
           { label: 'Afiliados Especiais', path: '/special-affiliates', icon: Crown },
+          { label: 'Roster OTG', path: '/roster-otg', icon: Database },
           { label: 'API Parceiros', path: '/parceiros-api', icon: Plug },
           { label: 'Configurações', path: '/settings', icon: Settings }
         ] : [])
@@ -173,6 +175,8 @@ export default function DashboardLayout() {
                 ? 'Afiliados Especiais'
                 : location.pathname === '/parceiros-api'
                 ? 'API Parceiros'
+                : location.pathname === '/roster-otg'
+                ? 'Roster OTG'
                 : location.pathname === '/financeiro'
                 ? 'Financeiro'
                 : location.pathname === '/network/afiliados'

@@ -913,9 +913,11 @@ export interface PendingAffiliate {
   house: string;
   email?: string | null;
   phone?: string | null;
+  social?: string | null;
   registerUrl?: string | null;
   status: 'pending' | 'reconciled';
   affiliateId?: string;  // id real do relatório, após reconciliar
+  updatedAt?: any;
 }
 
 export async function fetchPendingAffiliates(): Promise<PendingAffiliate[]> {
@@ -950,6 +952,31 @@ export async function importPendingAffiliates(rows: Array<Partial<PendingAffilia
   if (!response.ok) {
     const e = await response.json().catch(() => ({}));
     throw new Error(e.error || e.message || `Erro ao importar pré-cadastros: ${response.status}`);
+  }
+  return response.json();
+}
+
+// Pull AO VIVO do roster de aprovados direto da OTG (Supabase de provisionamento).
+// Faz upsert em pending_affiliates + reconcilia contra o relatório. Server-only
+// (creds OTG_LINKS_* no .env). Ver POST /api/pending-affiliates/refresh.
+export interface RefreshRosterResult {
+  source: string;
+  total: number;
+  byHouse: Record<string, number>;
+  imported: number;
+  skipped: number;
+  reconciled: number;
+  fetchedAt: string;
+}
+
+export async function refreshPendingAffiliates(): Promise<RefreshRosterResult> {
+  const response = await authFetch('/api/pending-affiliates/refresh', {
+    method: 'POST',
+    headers: { Accept: 'application/json' },
+  });
+  if (!response.ok) {
+    const e = await response.json().catch(() => ({}));
+    throw new Error(e.error || e.message || `Erro ao atualizar da OTG: ${response.status}`);
   }
   return response.json();
 }
