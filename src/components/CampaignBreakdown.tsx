@@ -39,7 +39,7 @@ export default function CampaignBreakdown({
   const data = Array.isArray(rows) ? rows : [];
 
   const avatar = (name: string) => (
-    <div className="w-7 h-7 shrink-0 rounded-lg bg-brand/10 text-brand flex items-center justify-center font-black text-[11px]">
+    <div className="w-7 h-7 shrink-0 rounded-lg bg-brand/10 text-brand dark:bg-white/10 dark:text-white flex items-center justify-center font-black text-[11px]">
       {name.charAt(0).toUpperCase()}
     </div>
   );

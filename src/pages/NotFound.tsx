@@ -7,7 +7,7 @@ export default function NotFound() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 px-6">
       <div className="w-full max-w-md text-center bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl shadow-sm p-12">
-        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-brand/10 text-brand text-[10px] font-black uppercase tracking-[0.2em] mb-7">
+        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-brand/10 text-brand dark:bg-white/10 dark:text-white text-[10px] font-black uppercase tracking-[0.2em] mb-7">
           <Compass size={14} /> Agência Boost
         </div>
         <div className="text-6xl font-black text-slate-900 dark:text-white tracking-tighter leading-none">404</div>

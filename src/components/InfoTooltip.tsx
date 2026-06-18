@@ -28,7 +28,7 @@ export default function InfoTooltip({ text, size = 14, align = 'center', classNa
       <button
         type="button"
         aria-label="Mais informações"
-        className={cn('text-slate-400 hover:text-brand focus:text-brand outline-none transition-colors', className)}
+        className={cn('text-slate-400 hover:text-brand focus:text-brand dark:hover:text-white dark:focus:text-white outline-none transition-colors', className)}
       >
         <HelpCircle size={size} />
       </button>

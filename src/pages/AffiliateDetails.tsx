@@ -368,7 +368,7 @@ export default function AffiliateDetails() {
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-        <Loader2 className="w-10 h-10 text-brand animate-spin" />
+        <Loader2 className="w-10 h-10 text-brand dark:text-white animate-spin" />
         <p className="text-slate-500 font-medium">Carregando informações realistas...</p>
       </div>
     );
@@ -634,7 +634,7 @@ export default function AffiliateDetails() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="p-6 bg-slate-50 dark:bg-neutral-800/50 rounded-2xl border border-slate-100 dark:border-neutral-800 flex items-center justify-between group hover:border-brand/20 transition-all">
                         <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 rounded-xl bg-white dark:bg-neutral-800 flex items-center justify-center text-slate-400 group-hover:text-brand transition-colors shadow-sm text-xs font-black">
+                          <div className="w-10 h-10 rounded-xl bg-white dark:bg-neutral-800 flex items-center justify-center text-slate-400 group-hover:text-brand dark:group-hover:text-white transition-colors shadow-sm text-xs font-black">
                             R$
                           </div>
                           <div>
@@ -650,7 +650,7 @@ export default function AffiliateDetails() {
 
                       <div className="p-6 bg-slate-50 dark:bg-neutral-800/50 rounded-2xl border border-slate-100 dark:border-neutral-800 flex items-center justify-between group hover:border-brand/20 transition-all">
                         <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 rounded-xl bg-white dark:bg-neutral-800 flex items-center justify-center text-slate-400 group-hover:text-brand transition-colors shadow-sm">
+                          <div className="w-10 h-10 rounded-xl bg-white dark:bg-neutral-800 flex items-center justify-center text-slate-400 group-hover:text-brand dark:group-hover:text-white transition-colors shadow-sm">
                             <TrendingUp size={20} />
                           </div>
                           <div>
@@ -691,7 +691,7 @@ export default function AffiliateDetails() {
                       className="bg-white dark:bg-neutral-900 p-8 rounded-[2.5rem] border border-slate-100 dark:border-neutral-800 shadow-sm group hover:border-brand/20 transition-all duration-500"
                     >
                       <div className="flex items-center justify-between mb-4">
-                        <div className="p-3 bg-slate-50 dark:bg-neutral-800 rounded-2xl text-slate-400 group-hover:text-brand transition-colors">
+                        <div className="p-3 bg-slate-50 dark:bg-neutral-800 rounded-2xl text-slate-400 group-hover:text-brand dark:group-hover:text-white transition-colors">
                           <UserPlus size={20} />
                         </div>
                         <TrendBadge change={isAllBrands ? percentChange(row.registrations || 0, prevRegistrations ?? 0) : 0} />
@@ -711,7 +711,7 @@ export default function AffiliateDetails() {
                       className="bg-white dark:bg-neutral-900 p-8 rounded-[2.5rem] border border-slate-100 dark:border-neutral-800 shadow-sm group hover:border-brand/20 transition-all duration-500"
                     >
                       <div className="flex items-center justify-between mb-4">
-                        <div className="p-3 bg-slate-50 dark:bg-neutral-800 rounded-2xl text-slate-400 group-hover:text-brand transition-colors">
+                        <div className="p-3 bg-slate-50 dark:bg-neutral-800 rounded-2xl text-slate-400 group-hover:text-brand dark:group-hover:text-white transition-colors">
                           <Building size={20} />
                         </div>
                         <div className="flex items-center gap-2">
@@ -740,7 +740,7 @@ export default function AffiliateDetails() {
                       className="bg-white dark:bg-neutral-900 p-8 rounded-[2.5rem] border border-slate-100 dark:border-neutral-800 shadow-sm group hover:border-brand/20 transition-all duration-500"
                     >
                       <div className="flex items-center justify-between mb-4">
-                        <div className="p-3 bg-slate-50 dark:bg-neutral-800 rounded-2xl text-slate-400 group-hover:text-brand transition-colors">
+                        <div className="p-3 bg-slate-50 dark:bg-neutral-800 rounded-2xl text-slate-400 group-hover:text-brand dark:group-hover:text-white transition-colors">
                           <Shield size={20} />
                         </div>
                         <div className="bg-slate-100 dark:bg-neutral-800 px-2 py-1 rounded-lg">
@@ -942,7 +942,7 @@ export default function AffiliateDetails() {
                       <button 
                         type="button"
                         onClick={generateTemporaryPassword}
-                        className="text-[10px] uppercase tracking-widest font-bold text-brand hover:text-brand-dark transition-colors"
+                        className="text-[10px] uppercase tracking-widest font-bold text-brand dark:text-white hover:text-brand-dark transition-colors"
                       >
                         Gerar nova senha
                       </button>
@@ -996,7 +996,7 @@ export default function AffiliateDetails() {
                   <div className="flex justify-between items-center text-left">
                     <div>
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Senha Inicial</p>
-                      <p className="text-lg font-mono font-black text-brand tracking-widest">{userPassword}</p>
+                      <p className="text-lg font-mono font-black text-brand dark:text-white tracking-widest">{userPassword}</p>
                     </div>
                     <button 
                       onClick={() => navigator.clipboard.writeText(userPassword)}
@@ -1129,7 +1129,7 @@ export default function AffiliateDetails() {
             
             <div className="p-8 space-y-6">
               <div className="text-center space-y-2 mb-4">
-                <div className="w-16 h-16 bg-brand/10 text-brand rounded-full flex items-center justify-center mx-auto mb-4">
+                <div className="w-16 h-16 bg-brand/10 text-brand dark:bg-white/10 dark:text-white rounded-full flex items-center justify-center mx-auto mb-4">
                   <Link size={32} />
                 </div>
                 <h4 className="text-lg font-black text-slate-900 dark:text-white">Link de Ativação</h4>
