@@ -4,9 +4,10 @@ import { Link, useNavigate } from 'react-router-dom';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db, handleFirestoreError, OperationType } from '../lib/firebase';
-import { UserPlus, Mail, Lock, User, AlertCircle, CheckCircle } from 'lucide-react';
+import { UserPlus, Mail, Lock, User, AlertCircle, CheckCircle, Phone, Share2, IdCard } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
 import { cn } from '../lib/utils';
+import { maskCPF, maskPhone, isValidCPF, isValidPhone } from '../lib/validators';
 
 const boostLogo = `${import.meta.env.BASE_URL}boost-home/logo.svg`;
 
@@ -14,6 +15,9 @@ export default function Register() {
   const { theme } = useTheme();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [socialMedia, setSocialMedia] = useState('');
+  const [cpf, setCpf] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
@@ -22,8 +26,19 @@ export default function Register() {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setError('');
+
+    if (!isValidCPF(cpf)) {
+      setError('CPF inválido. Verifique os números digitados.');
+      return;
+    }
+
+    if (!isValidPhone(phone)) {
+      setError('Telefone inválido. Use o formato (00) 00000-0000.');
+      return;
+    }
+
+    setLoading(true);
 
     // Explicit path for logging
     let currentPath = '';
@@ -60,6 +75,9 @@ export default function Register() {
           uid: user.uid,
           name: name.trim(),
           email: email.trim().toLowerCase(),
+          phone: phone.trim(),
+          socialMedia: socialMedia.trim(),
+          cpf: cpf.trim(),
           role,
           avatarUrl: `https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(name)}`,
           createdAt: serverTimestamp(),
@@ -119,7 +137,7 @@ export default function Register() {
       >
         <div className="text-center mb-8">
           <img src={boostLogo} alt="Boost" className="h-7 w-auto mx-auto mb-4 invert dark:invert-0" />
-          <p className="text-slate-400 dark:text-neutral-500 text-[10px] font-bold uppercase tracking-widest">Crie sua conta profissional</p>
+          <p className="text-slate-400 dark:text-neutral-500 text-[10px] font-bold uppercase tracking-widest">Solicite sua afiliação</p>
         </div>
 
         {error && (
@@ -161,7 +179,54 @@ export default function Register() {
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-[10px] uppercase font-bold text-slate-400 dark:text-neutral-500 tracking-widest ml-1">Senha Corporativa</label>
+            <label className="text-[10px] uppercase font-bold text-slate-400 dark:text-neutral-500 tracking-widest ml-1">Telefone</label>
+            <div className="relative">
+              <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-neutral-500" size={16} />
+              <input
+                type="tel"
+                inputMode="numeric"
+                value={phone}
+                onChange={(e) => setPhone(maskPhone(e.target.value))}
+                required
+                className="w-full pl-12 pr-4 py-3.5 bg-slate-50 dark:bg-neutral-800/60 border border-slate-200 dark:border-neutral-700 rounded-xl text-sm dark:text-white focus:ring-2 focus:ring-brand/20 focus:border-brand transition-all outline-none"
+                placeholder="(11) 98765-4321"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] uppercase font-bold text-slate-400 dark:text-neutral-500 tracking-widest ml-1">Rede Social</label>
+            <div className="relative">
+              <Share2 className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-neutral-500" size={16} />
+              <input
+                type="text"
+                value={socialMedia}
+                onChange={(e) => setSocialMedia(e.target.value)}
+                required
+                className="w-full pl-12 pr-4 py-3.5 bg-slate-50 dark:bg-neutral-800/60 border border-slate-200 dark:border-neutral-700 rounded-xl text-sm dark:text-white focus:ring-2 focus:ring-brand/20 focus:border-brand transition-all outline-none"
+                placeholder="@seu_perfil"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] uppercase font-bold text-slate-400 dark:text-neutral-500 tracking-widest ml-1">CPF</label>
+            <div className="relative">
+              <IdCard className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-neutral-500" size={16} />
+              <input
+                type="text"
+                inputMode="numeric"
+                value={cpf}
+                onChange={(e) => setCpf(maskCPF(e.target.value))}
+                required
+                className="w-full pl-12 pr-4 py-3.5 bg-slate-50 dark:bg-neutral-800/60 border border-slate-200 dark:border-neutral-700 rounded-xl text-sm dark:text-white focus:ring-2 focus:ring-brand/20 focus:border-brand transition-all outline-none"
+                placeholder="000.000.000-00"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] uppercase font-bold text-slate-400 dark:text-neutral-500 tracking-widest ml-1">Crie uma senha</label>
             <div className="relative">
               <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-neutral-500" size={16} />
               <input
@@ -181,7 +246,7 @@ export default function Register() {
             disabled={loading}
             className="w-full py-4 rounded-2xl font-bold mt-4 flex items-center justify-center gap-2 transition-all disabled:opacity-50 bg-brand text-white hover:bg-brand-light shadow-lg shadow-brand/20 dark:bg-white dark:text-neutral-950 dark:hover:bg-neutral-200 dark:shadow-white/10"
           >
-            {loading ? 'Cadastrando...' : <><UserPlus size={18} /> Criar minha conta</>}
+            {loading ? 'Enviando...' : <><UserPlus size={18} /> Enviar solicitação</>}
           </button>
         </form>
 
