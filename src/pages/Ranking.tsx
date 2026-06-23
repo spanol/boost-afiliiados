@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { Trophy, Crown, Loader2, RefreshCw, Medal } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -26,7 +27,10 @@ export default function Ranking() {
   const { profile } = useAuth();
   const { push } = useToast();
   const isAdmin = profile?.role === 'admin';
-  const today = todayISO();
+  // Dia exibido: hoje por padrão; admin pode inspecionar/recalcular outro via ?date=YYYY-MM-DD.
+  const [searchParams] = useSearchParams();
+  const dateParam = searchParams.get('date');
+  const today = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : todayISO();
 
   const [ranking, setRanking] = useState<DailyRanking | null>(null);
   const [loading, setLoading] = useState(true);
@@ -132,9 +136,15 @@ export default function Ranking() {
           <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl border border-slate-100 dark:border-neutral-700 bg-slate-50 dark:bg-neutral-800 text-amber-500 mb-4">
             <Trophy size={24} />
           </div>
-          <h3 className="text-sm font-bold text-slate-800 dark:text-neutral-100 mb-1">Ranking ainda não calculado para hoje</h3>
+          <h3 className="text-sm font-bold text-slate-800 dark:text-neutral-100 mb-1">
+            {ranking ? 'Sem comissão registrada neste dia (ainda)' : 'Ranking ainda não calculado para este dia'}
+          </h3>
           <p className="text-xs text-slate-500 dark:text-neutral-400">
-            {isAdmin ? 'Clique em "Gerar ranking de hoje" para calcular a partir dos resultados do dia.' : 'Aguarde o ciclo de atualização — a Boost calcula a partir dos resultados do dia.'}
+            {ranking
+              ? 'A OTG atualiza os resultados entre 13h–14h. Atualize mais tarde para ver o ranking do dia.'
+              : isAdmin
+                ? 'Clique em "Gerar ranking de hoje" para calcular a partir dos resultados do dia.'
+                : 'Aguarde o ciclo de atualização — a Boost calcula a partir dos resultados do dia.'}
           </p>
         </div>
       ) : (
