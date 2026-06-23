@@ -19,7 +19,8 @@ import {
   Plug,
   Database,
   Building2,
-  Megaphone
+  Megaphone,
+  Trophy
 } from 'lucide-react';
 import { cn, humanizeName } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -67,6 +68,8 @@ export default function DashboardLayout() {
         },
         // Avisos/comunicados: visível a todos os papéis (admin gere, afiliado lê).
         { label: 'Avisos', path: '/avisos', icon: Megaphone },
+        // Ranking diário (gamificação): leaderboard de comissão do dia, todos os papéis.
+        { label: 'Ranking', path: '/ranking', icon: Trophy },
         // Item "Afiliados": o master vê a lista completa (/affiliates); o afiliado
         // ESPECIAL vê a lista da própria rede (/network/afiliados), espelhando o
         // master (Dashboard + Afiliados). O afiliado comum não tem este módulo.
@@ -198,6 +201,8 @@ export default function DashboardLayout() {
                 ? 'Financeiro'
                 : location.pathname === '/avisos'
                 ? 'Avisos'
+                : location.pathname === '/ranking'
+                ? 'Ranking'
                 : location.pathname === '/network/afiliados'
                   ? 'Meus Afiliados'
                   : location.pathname === '/network'

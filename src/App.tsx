@@ -13,6 +13,7 @@ import Profile from './pages/Profile';
 import Settings from './pages/Settings';
 import Contacts from './pages/Contacts';
 import Avisos from './pages/Avisos';
+import Ranking from './pages/Ranking';
 import AffiliatesList from './pages/AffiliatesList';
 import AffiliateDetails from './pages/AffiliateDetails';
 import SpecialDashboard from './pages/SpecialDashboard';
@@ -108,6 +109,7 @@ export default function App() {
             } />
             <Route path="/profile" element={<Profile />} />
             <Route path="/avisos" element={<Avisos />} />
+            <Route path="/ranking" element={<Ranking />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/contacts" element={
               <ProtectedRoute role="admin">

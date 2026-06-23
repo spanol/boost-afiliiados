@@ -682,6 +682,100 @@ async function startServer() {
     }
   });
 
+  // --- Ranking diário (snapshot calculado no servidor) ----------------------
+  // O afiliado não consegue montar o leaderboard sozinho (o proxy o escopa ao
+  // próprio id). Então o admin dispara o cálculo: buscamos os results do DIA
+  // (groupBy=affiliate, paginado como o partner-api), calculamos o repasse de cada
+  // afiliado (qualified_cpa·CPA + rvs·REV%, taxa default do afiliado) e gravamos
+  // daily_rankings/{data} — que todo afiliado lê (leaderboard público com nomes).
+  const isoDateRe = /^\d{4}-\d{2}-\d{2}$/;
+  app.post('/api/rankings/compute', requireAdmin, async (req, res) => {
+    if (!adminDb) return res.status(500).json({ error: 'Firebase Admin não está inicializado.' });
+    const BASE_URL = process.env.VITE_AFFILIATE_API_BASE_URL || 'https://affiliate-api-prd.partnersotg.com';
+    const apiKey = process.env.AFFILIATE_API_KEY;
+    if (!apiKey) return res.status(500).json({ error: 'Chave de API externa não configurada.' });
+
+    // Data: a do corpo (browser, fuso BR) ou hoje no servidor como fallback.
+    const date = isoDateRe.test(String(req.body?.date)) ? String(req.body.date) : new Date().toISOString().slice(0, 10);
+
+    try {
+      // Resultados do dia, todas as páginas (a OTG entrega pageSize=50).
+      const baseParams = new URLSearchParams();
+      baseParams.set('startDate', date);
+      baseParams.set('endDate', date);
+      baseParams.set('groupBy', 'affiliate');
+      const MAX_PAGES = 50;
+      const rows: any[] = [];
+      let page = 1;
+      let totalPages = 1;
+      do {
+        const params = new URLSearchParams(baseParams);
+        params.set('page', String(page));
+        const resp = await fetch(`${BASE_URL}/api/v2/external/results?${params.toString()}`, {
+          headers: { 'x-api-key': apiKey, Accept: 'application/json', 'User-Agent': 'AgenciaBoost-App/1.0' },
+        });
+        const text = await resp.text();
+        let body: any = null;
+        try { body = text ? JSON.parse(text) : null; } catch { body = null; }
+        if (!resp.ok) {
+          const requestId = crypto.randomBytes(8).toString('hex');
+          console.error(`[rankings] ${requestId} results upstream ${resp.status} (page ${page}):`, text);
+          // code "040" (sem dados) não é erro: grava ranking vazio.
+          if (body?.code === '040') break;
+          return res.status(502).json({ error: 'Falha ao consultar o relatório do dia.', code: body?.code, requestId });
+        }
+        const d = body?.data;
+        const pageRows = Array.isArray(d?.data) ? d.data : (Array.isArray(d) ? d : (Array.isArray(body) ? body : []));
+        rows.push(...pageRows);
+        const tp = Number(d?.meta?.totalPages);
+        totalPages = Number.isFinite(tp) && tp > 0 ? tp : 1;
+        page++;
+      } while (page <= totalPages && page <= MAX_PAGES);
+
+      // Configs (taxa por afiliado) e nomes do mirror.
+      const [cfgSnap, affSnap] = await Promise.all([
+        adminDb.collection('affiliate_configs').get(),
+        adminDb.collection('affiliates').get(),
+      ]);
+      const configs: Record<string, { cpaValue: number; revPercentage: number }> = {};
+      cfgSnap.forEach((d) => { const v = d.data() as any; configs[d.id] = { cpaValue: Number(v?.cpaValue) || 0, revPercentage: Number(v?.revPercentage) || 0 }; });
+      const names: Record<string, string> = {};
+      affSnap.forEach((d) => { const v = d.data() as any; if (v?.name) names[d.id] = String(v.name); });
+
+      // Repasse do afiliado = comissão dele (mesma fórmula dos dashboards).
+      const entries = rows
+        .map((r) => {
+          const affiliateId = String(r?.affiliate_id ?? r?.id ?? '').trim();
+          if (!affiliateId) return null;
+          const cfg = configs[affiliateId] || { cpaValue: 0, revPercentage: 0 };
+          const commission = (Number(r?.qualified_cpa) || 0) * cfg.cpaValue + (Number(r?.rvs) || 0) * (cfg.revPercentage / 100);
+          const name = names[affiliateId] || String(r?.name ?? r?.label ?? r?.affiliate_name ?? `Afiliado #${affiliateId}`);
+          return { affiliateId, name, commission: Math.round(commission * 100) / 100 };
+        })
+        .filter((e): e is { affiliateId: string; name: string; commission: number } => !!e && e.commission > 0)
+        .sort((a, b) => b.commission - a.commission)
+        .slice(0, 100)
+        .map((e, i) => ({ pos: i + 1, ...e }));
+
+      const adminSnap = await adminDb.collection('users').doc((req as any).user.uid).get();
+      const generatedByName = (adminSnap.exists ? (adminSnap.data() as any)?.name : null) || 'Gerência Boost';
+
+      await adminDb.collection('daily_rankings').doc(date).set({
+        date,
+        entries,
+        count: entries.length,
+        metric: 'commission',
+        generatedByName,
+        generatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+
+      return res.json({ date, count: entries.length, entries, generatedAt: new Date().toISOString() });
+    } catch (error: any) {
+      console.error('[rankings] compute:', error);
+      return res.status(500).json({ error: error.message || 'Erro interno calculando ranking.' });
+    }
+  });
+
   const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
   const fetchExternalAffiliates = async (): Promise<any[]> => {
