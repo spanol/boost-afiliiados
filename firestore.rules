@@ -129,5 +129,34 @@ service cloud.firestore {
     match /api_partners/{partnerId} {
       allow read, write: if isAdmin();
     }
+
+    // Avisos / comunicados da rede (feed broadcast). O admin publica (via servidor,
+    // requireAdmin); qualquer afiliado autenticado lê em tempo real. O filtro de
+    // audiência (all/clients/specials) é aplicado no cliente — não é dado sensível,
+    // só relevância. Escrita liberada a admin (o servidor usa Admin SDK; admin
+    // direto também é permitido, espelhando affiliates/affiliate_configs).
+    match /notices/{noticeId} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Mensagens diretas da gerência → afiliado (popup 1:1). Cada doc carrega o
+    // `recipientUid` do destinatário; a leitura é escopada a ele (query segura:
+    // resource.data.recipientUid == request.auth.uid). Escrita só pelo servidor
+    // (Admin SDK ignora estas regras) — admin direto também é permitido. A
+    // marca-leitura passa por endpoint autenticado (servidor valida o dono).
+    match /direct_messages/{messageId} {
+      allow read: if isSignedIn() && resource.data.recipientUid == request.auth.uid;
+      allow write: if isAdmin();
+    }
+
+    // Ranking diário (snapshot calculado no servidor com a x-api-key da OTG, que o
+    // afiliado não tem acesso pra montar sozinho). Doc id = data YYYY-MM-DD. Leitura
+    // liberada a signed-in (leaderboard público com nomes — decisão de produto);
+    // escrita só pelo servidor/admin.
+    match /daily_rankings/{date} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
   }
 }

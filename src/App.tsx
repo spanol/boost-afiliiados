@@ -12,6 +12,7 @@ import ClientDashboard from './pages/ClientDashboard';
 import Profile from './pages/Profile';
 import Settings from './pages/Settings';
 import Contacts from './pages/Contacts';
+import Avisos from './pages/Avisos';
 import AffiliatesList from './pages/AffiliatesList';
 import AffiliateDetails from './pages/AffiliateDetails';
 import SpecialDashboard from './pages/SpecialDashboard';
@@ -106,6 +107,7 @@ export default function App() {
               </ProtectedRoute>
             } />
             <Route path="/profile" element={<Profile />} />
+            <Route path="/avisos" element={<Avisos />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/contacts" element={
               <ProtectedRoute role="admin">

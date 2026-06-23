@@ -18,11 +18,14 @@ import {
   Wallet,
   Plug,
   Database,
-  Building2
+  Building2,
+  Megaphone
 } from 'lucide-react';
 import { cn, humanizeName } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { useTheme } from '../contexts/ThemeContext';
+import NotificationBell from './NotificationBell';
+import DirectMessagePopup from './DirectMessagePopup';
 
 const boostLogo = `${import.meta.env.BASE_URL}boost-home/logo.svg`;
 
@@ -62,6 +65,8 @@ export default function DashboardLayout() {
               : (profile?.affiliateId ? `/affiliates/${profile.affiliateId}` : '/profile'),
           icon: LayoutDashboard
         },
+        // Avisos/comunicados: visível a todos os papéis (admin gere, afiliado lê).
+        { label: 'Avisos', path: '/avisos', icon: Megaphone },
         // Item "Afiliados": o master vê a lista completa (/affiliates); o afiliado
         // ESPECIAL vê a lista da própria rede (/network/afiliados), espelhando o
         // master (Dashboard + Afiliados). O afiliado comum não tem este módulo.
@@ -191,6 +196,8 @@ export default function DashboardLayout() {
                 ? 'Roster OTG'
                 : location.pathname === '/financeiro'
                 ? 'Financeiro'
+                : location.pathname === '/avisos'
+                ? 'Avisos'
                 : location.pathname === '/network/afiliados'
                   ? 'Meus Afiliados'
                   : location.pathname === '/network'
@@ -200,6 +207,7 @@ export default function DashboardLayout() {
                     : 'Minha Conta'}
           </h2>
           <div className="flex items-center gap-4">
+            <NotificationBell />
             <button
               onClick={toggleTheme}
               className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-neutral-300 hover:bg-slate-200 dark:hover:bg-white/10 hover:text-slate-900 dark:hover:text-white border border-transparent dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20 transition-all shadow-sm"
@@ -259,6 +267,9 @@ export default function DashboardLayout() {
           </>
         )}
       </AnimatePresence>
+
+      {/* Popup global das mensagens diretas da gerência (Feature B) */}
+      <DirectMessagePopup />
     </div>
   );
 }

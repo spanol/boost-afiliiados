@@ -541,6 +541,147 @@ async function startServer() {
     }
   });
 
+  // --- Avisos / comunicados da rede (notices) -------------------------------
+  // Feed broadcast: o admin publica, o afiliado lê (realtime, regra signed-in).
+  // Escrita só pelo servidor (requireAdmin), com saneamento de tamanho/enum.
+  const NOTICE_CATEGORIES = ['info', 'importante', 'comunicado'];
+  const NOTICE_AUDIENCES = ['all', 'clients', 'specials'];
+
+  const sanitizeNotice = (body: any) => {
+    const title = String(body?.title ?? '').trim().slice(0, 160);
+    const text = String(body?.body ?? '').trim().slice(0, 5000);
+    const category = NOTICE_CATEGORIES.includes(body?.category) ? body.category : 'info';
+    const audience = NOTICE_AUDIENCES.includes(body?.audience) ? body.audience : 'all';
+    const link = body?.link ? String(body.link).trim().slice(0, 500) : '';
+    return { title, text, category, audience, link };
+  };
+
+  app.post('/api/notices', requireAdmin, async (req, res) => {
+    if (!adminDb) return res.status(500).json({ error: 'Firebase Admin não está inicializado.' });
+    try {
+      const { title, text, category, audience, link } = sanitizeNotice(req.body);
+      if (!title || !text) {
+        return res.status(400).json({ error: 'Título e mensagem são obrigatórios.' });
+      }
+      const active = req.body?.active === undefined ? true : !!req.body.active;
+      const payload = {
+        title,
+        body: text,
+        category,
+        audience,
+        link: link || null,
+        active,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      };
+      const docRef = await adminDb.collection('notices').add(payload);
+      return res.status(201).json({ id: docRef.id, ...payload, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+    } catch (error: any) {
+      console.error('Error creating notice:', error);
+      return res.status(500).json({ error: error.message || 'Erro interno criando aviso.' });
+    }
+  });
+
+  app.patch('/api/notices/:id', requireAdmin, async (req, res) => {
+    if (!adminDb) return res.status(500).json({ error: 'Firebase Admin não está inicializado.' });
+    try {
+      const id = String(req.params.id);
+      const patch: Record<string, any> = { updatedAt: admin.firestore.FieldValue.serverTimestamp() };
+      if (req.body?.title !== undefined) patch.title = String(req.body.title).trim().slice(0, 160);
+      if (req.body?.body !== undefined) patch.body = String(req.body.body).trim().slice(0, 5000);
+      if (req.body?.category !== undefined) patch.category = NOTICE_CATEGORIES.includes(req.body.category) ? req.body.category : 'info';
+      if (req.body?.audience !== undefined) patch.audience = NOTICE_AUDIENCES.includes(req.body.audience) ? req.body.audience : 'all';
+      if (req.body?.link !== undefined) patch.link = req.body.link ? String(req.body.link).trim().slice(0, 500) : null;
+      if (req.body?.active !== undefined) patch.active = !!req.body.active;
+      await adminDb.collection('notices').doc(id).set(patch, { merge: true });
+      return res.json({ id, updated: true });
+    } catch (error: any) {
+      console.error('Error updating notice:', error);
+      return res.status(500).json({ error: error.message || 'Erro interno atualizando aviso.' });
+    }
+  });
+
+  app.delete('/api/notices/:id', requireAdmin, async (req, res) => {
+    if (!adminDb) return res.status(500).json({ error: 'Firebase Admin não está inicializado.' });
+    try {
+      await adminDb.collection('notices').doc(String(req.params.id)).delete();
+      return res.json({ deleted: true });
+    } catch (error: any) {
+      console.error('Error deleting notice:', error);
+      return res.status(500).json({ error: error.message || 'Erro interno removendo aviso.' });
+    }
+  });
+
+  // --- Mensagens diretas da gerência → afiliado (popup 1:1) -----------------
+  // O admin envia escolhendo o afiliado; resolvemos o(s) login(s) vinculado(s)
+  // (users.affiliateId) e gravamos `recipientUid` em cada mensagem — a leitura é
+  // escopada por recipientUid na regra (query segura, sem get()). Se o afiliado
+  // ainda não tem login Boost, não há pra quem entregar o popup → 409 informativo.
+  app.post('/api/direct-messages', requireAdmin, async (req, res) => {
+    if (!adminDb) return res.status(500).json({ error: 'Firebase Admin não está inicializado.' });
+    try {
+      const affiliateId = String(req.body?.affiliateId ?? '').trim();
+      const title = String(req.body?.title ?? '').trim().slice(0, 160);
+      const text = String(req.body?.body ?? '').trim().slice(0, 5000);
+      if (!affiliateId) return res.status(400).json({ error: 'affiliateId é obrigatório.' });
+      if (!title || !text) return res.status(400).json({ error: 'Título e mensagem são obrigatórios.' });
+
+      // Logins vinculados ao afiliado.
+      const usersSnap = await adminDb.collection('users').where('affiliateId', '==', affiliateId).get();
+      if (usersSnap.empty) {
+        return res.status(409).json({ error: 'Este afiliado ainda não tem login Boost vinculado — não há para quem entregar a mensagem.' });
+      }
+
+      // Nome do afiliado (mirror) e nome do remetente (admin) p/ exibição.
+      const affSnap = await adminDb.collection('affiliates').doc(affiliateId).get();
+      const affiliateName = (affSnap.exists ? (affSnap.data() as any)?.name : null)
+        || (usersSnap.docs[0].data() as any)?.name || 'Afiliado';
+      const adminSnap = await adminDb.collection('users').doc((req as any).user.uid).get();
+      const createdByName = (adminSnap.exists ? (adminSnap.data() as any)?.name : null) || 'Gerência Boost';
+
+      const batch = adminDb.batch();
+      let delivered = 0;
+      usersSnap.forEach((u) => {
+        const ref = adminDb!.collection('direct_messages').doc();
+        batch.set(ref, {
+          recipientUid: u.id,
+          affiliateId,
+          affiliateName,
+          title,
+          body: text,
+          createdByName,
+          readAt: null,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        delivered++;
+      });
+      await batch.commit();
+      return res.status(201).json({ delivered });
+    } catch (error: any) {
+      console.error('Error sending direct message:', error);
+      return res.status(500).json({ error: error.message || 'Erro interno enviando mensagem.' });
+    }
+  });
+
+  // Marca a própria mensagem como lida (após o afiliado fechar o popup).
+  app.post('/api/direct-messages/:id/read', requireAuth, async (req, res) => {
+    if (!adminDb) return res.status(500).json({ error: 'Firebase Admin não está inicializado.' });
+    try {
+      const id = String(req.params.id);
+      const ref = adminDb.collection('direct_messages').doc(id);
+      const snap = await ref.get();
+      if (!snap.exists) return res.status(404).json({ error: 'Mensagem não encontrada.' });
+      if ((snap.data() as any)?.recipientUid !== (req as any).user.uid) {
+        return res.status(403).json({ error: 'Você não pode alterar esta mensagem.' });
+      }
+      await ref.set({ readAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true });
+      return res.json({ read: true });
+    } catch (error: any) {
+      console.error('Error marking direct message read:', error);
+      return res.status(500).json({ error: error.message || 'Erro interno marcando leitura.' });
+    }
+  });
+
   const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
   const fetchExternalAffiliates = async (): Promise<any[]> => {
