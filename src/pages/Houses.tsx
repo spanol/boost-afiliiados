@@ -3,12 +3,19 @@ import { motion } from 'motion/react';
 import { Navigate } from 'react-router-dom';
 import {
   Building2, Plus, Loader2, Pencil, Trash2, X, Upload, Link2, Check, Power,
+  Table2, AlertTriangle, FileSpreadsheet, Cloud, Calendar,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import {
   House, HouseInput, fetchHouses, createHouse, updateHouse, deleteHouse, syncKnownBrandsFrom,
+  fetchHouseResults, importHouseResults, clearHouseResults,
 } from '../services/houseService';
+import { fetchAffiliates } from '../services/affiliateService';
+import {
+  parseResultsCsv, resolveAffiliates, buildAffiliateLookup, ResolvedRow, METRIC_KEYS, StoredManualRow,
+} from '../lib/houseResults';
+import { humanizeName } from '../lib/utils';
 
 // Backoffice de casas (betting houses) — admin. Cria/edita o registro próprio de
 // casas (nome/slug/brandId/logo/registerUrlTemplate/ativa) que alimenta logos,
@@ -21,6 +28,7 @@ export default function Houses() {
   const [houses, setHouses] = useState<House[]>([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState<{ open: boolean; house?: House }>({ open: false });
+  const [resultsModal, setResultsModal] = useState<{ open: boolean; house?: House }>({ open: false });
   const [confirmDel, setConfirmDel] = useState<House | null>(null);
   const [deleting, setDeleting] = useState(false);
 
@@ -69,6 +77,10 @@ export default function Houses() {
           onClose={() => setModal({ open: false })}
           onSaved={async () => { setModal({ open: false }); await load(); }}
         />
+      )}
+
+      {resultsModal.open && resultsModal.house && (
+        <HouseResultsModal house={resultsModal.house} onClose={() => setResultsModal({ open: false })} />
       )}
 
       {confirmDel && (
@@ -150,6 +162,16 @@ export default function Houses() {
 
               <dl className="space-y-2 mb-5 text-xs">
                 <div className="flex items-center justify-between gap-2">
+                  <dt className="text-slate-400 dark:text-neutral-500 font-medium">Resultados</dt>
+                  <dd>
+                    {h.dataSource === 'manual' ? (
+                      <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400 font-semibold"><FileSpreadsheet size={11} /> Upload manual</span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-sky-600 dark:text-sky-400 font-semibold"><Cloud size={11} /> Automático (OTG)</span>
+                    )}
+                  </dd>
+                </div>
+                <div className="flex items-center justify-between gap-2">
                   <dt className="text-slate-400 dark:text-neutral-500 font-medium">brandId (OTG)</dt>
                   <dd className="font-mono text-slate-600 dark:text-neutral-300 truncate max-w-[60%]" title={h.brandId || ''}>
                     {h.brandId || <span className="text-slate-300 dark:text-neutral-600">—</span>}
@@ -165,6 +187,14 @@ export default function Houses() {
                 </div>
               </dl>
 
+              {h.dataSource === 'manual' && (
+                <button
+                  onClick={() => setResultsModal({ open: true, house: h })}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 mb-2 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs font-bold text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 transition-all"
+                >
+                  <Table2 size={14} /> Importar resultados
+                </button>
+              )}
               <div className="flex gap-2">
                 <button
                   onClick={() => setModal({ open: true, house: h })}
@@ -222,6 +252,7 @@ function HouseModal({ house, onClose, onSaved }: { house?: House; onClose: () =>
   const [brandId, setBrandId] = useState(house?.brandId ?? '');
   const [registerUrlTemplate, setRegisterUrlTemplate] = useState(house?.registerUrlTemplate ?? '');
   const [active, setActive] = useState(house?.active ?? true);
+  const [dataSource, setDataSource] = useState<'otg' | 'manual'>(house?.dataSource ?? 'manual');
   const [logoBase64, setLogoBase64] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -257,6 +288,7 @@ function HouseModal({ house, onClose, onSaved }: { house?: House; onClose: () =>
         brandId: brandId.trim() || null,
         registerUrlTemplate: registerUrlTemplate.trim() || null,
         active,
+        dataSource,
         ...(logoBase64 ? { logoBase64 } : {}),
       };
       if (editing && house) {
@@ -357,6 +389,31 @@ function HouseModal({ house, onClose, onSaved }: { house?: House; onClose: () =>
               />
             </Field>
 
+            <Field label="Origem dos resultados">
+              <div className="grid grid-cols-2 gap-2">
+                {([
+                  { v: 'otg' as const, icon: Cloud, title: 'Automático (OTG)', desc: 'vem da API externa' },
+                  { v: 'manual' as const, icon: FileSpreadsheet, title: 'Upload manual', desc: 'planilha/CSV' },
+                ]).map((opt) => (
+                  <button
+                    key={opt.v}
+                    type="button"
+                    onClick={() => setDataSource(opt.v)}
+                    className={`flex flex-col items-start gap-1 p-3 rounded-xl border text-left transition-all ${
+                      dataSource === opt.v
+                        ? 'border-amber-500 bg-amber-500/10'
+                        : 'border-slate-200 dark:border-neutral-700 hover:border-slate-300 dark:hover:border-neutral-600'
+                    }`}
+                  >
+                    <span className={`flex items-center gap-1.5 text-xs font-bold ${dataSource === opt.v ? 'text-amber-600 dark:text-amber-400' : 'text-slate-700 dark:text-neutral-200'}`}>
+                      <opt.icon size={13} /> {opt.title}
+                    </span>
+                    <span className="text-[10px] text-slate-400 dark:text-neutral-500">{opt.desc}</span>
+                  </button>
+                ))}
+              </div>
+            </Field>
+
             <label className="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-50 dark:bg-neutral-800/40 border border-slate-100 dark:border-neutral-800 cursor-pointer">
               <span className="text-sm font-semibold text-slate-700 dark:text-neutral-200 flex items-center gap-2">
                 <Power size={15} className={active ? 'text-emerald-500' : 'text-slate-400'} />
@@ -421,6 +478,258 @@ function ConfirmDeleteModal({ house, loading, onClose, onConfirm }: { house: Hou
             <button onClick={onConfirm} disabled={loading} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-red-500 text-white text-xs font-bold hover:bg-red-600 disabled:opacity-60 transition-all">
               {loading ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
               Remover
+            </button>
+          </div>
+        </motion.div>
+      </div>
+    </div>
+  );
+}
+
+// --- Modal de import de resultados (planilha/CSV) ---------------------------
+function HouseResultsModal({ house, onClose }: { house: House; onClose: () => void }) {
+  const { push } = useToast();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [affiliates, setAffiliates] = useState<any[]>([]);
+  const [existing, setExisting] = useState<StoredManualRow[]>([]);
+  const [text, setText] = useState('');
+  const [analysis, setAnalysis] = useState<ReturnType<typeof resolveAffiliates> | null>(null);
+  const [parseErrors, setParseErrors] = useState<{ line: number; message: string }[]>([]);
+  const [importing, setImporting] = useState(false);
+  const [loadingMeta, setLoadingMeta] = useState(true);
+
+  const lookup = useMemo(() => buildAffiliateLookup(affiliates), [affiliates]);
+
+  const loadMeta = async () => {
+    setLoadingMeta(true);
+    try {
+      const [affs, rows] = await Promise.all([
+        fetchAffiliates(),
+        fetchHouseResults({ houseSlug: house.slug }),
+      ]);
+      setAffiliates(Array.isArray(affs) ? affs : []);
+      setExisting(Array.isArray(rows) ? rows : []);
+    } catch {
+      push({ type: 'error', message: 'Não foi possível carregar afiliados/resultados.' });
+    } finally {
+      setLoadingMeta(false);
+    }
+  };
+
+  useEffect(() => { loadMeta(); /* eslint-disable-next-line */ }, [house.slug]);
+
+  // Reanalisa sempre que o texto ou o roster mudam.
+  useEffect(() => {
+    if (!text.trim()) { setAnalysis(null); setParseErrors([]); return; }
+    const parsed = parseResultsCsv(text);
+    setParseErrors(parsed.errors.map((e) => ({ line: e.line, message: e.message })));
+    setAnalysis(resolveAffiliates(parsed.rows, lookup));
+  }, [text, lookup]);
+
+  const onPickFile = (file?: File) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setText(typeof reader.result === 'string' ? reader.result : '');
+    reader.readAsText(file);
+  };
+
+  const canImport = !!analysis && analysis.rows.length > 0 && parseErrors.length === 0 && analysis.unresolved.length === 0;
+
+  const handleImport = async () => {
+    if (!analysis || !canImport) return;
+    setImporting(true);
+    try {
+      const rows = analysis.rows.map((r: ResolvedRow) => {
+        const out: any = { date: r.date, affiliateId: r.affiliateId };
+        for (const k of METRIC_KEYS) out[k] = r[k];
+        return out;
+      });
+      const res = await importHouseResults(house.slug, rows);
+      push({ type: 'success', message: `Importado: ${res.imported} linhas em ${res.dates.length} dia(s).` });
+      setText('');
+      setAnalysis(null);
+      await loadMeta();
+    } catch (e: any) {
+      push({ type: 'error', message: e?.message || 'Erro ao importar.' });
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const clearDay = async (date?: string) => {
+    try {
+      const n = await clearHouseResults(house.slug, date);
+      push({ type: 'success', message: date ? `Dia ${date} limpo (${n}).` : `Tudo limpo (${n}).` });
+      await loadMeta();
+    } catch (e: any) {
+      push({ type: 'error', message: e?.message || 'Erro ao limpar.' });
+    }
+  };
+
+  // Dias já importados (agrupados por data) com nº de linhas atribuídas + agregado.
+  const days = useMemo(() => {
+    const map = new Map<string, { attributed: number; aggregate: boolean }>();
+    for (const r of existing) {
+      const d = map.get(r.date) ?? { attributed: 0, aggregate: false };
+      if (r.affiliateId === null) d.aggregate = true; else d.attributed += 1;
+      map.set(r.date, d);
+    }
+    return [...map.entries()].map(([date, v]) => ({ date, ...v })).sort((a, b) => b.date.localeCompare(a.date));
+  }, [existing]);
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm overflow-y-auto" onClick={onClose}>
+      <div className="min-h-full flex items-center justify-center p-4">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.97, y: 10 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          onClick={(e) => e.stopPropagation()}
+          className="w-full max-w-3xl bg-white dark:bg-neutral-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-neutral-800 max-h-[calc(100vh_-_2rem)] flex flex-col"
+        >
+          <div className="flex items-center justify-between p-6 pb-4 border-b border-slate-100 dark:border-neutral-800">
+            <div className="flex items-center gap-3 min-w-0">
+              <HouseLogo house={house} size={36} />
+              <div className="min-w-0">
+                <h2 className="text-lg font-bold text-slate-900 dark:text-white truncate">Resultados · {house.name}</h2>
+                <p className="text-[11px] text-slate-400 dark:text-neutral-500">Importe os resultados diários por planilha (cole do Excel ou suba um .csv).</p>
+              </div>
+            </div>
+            <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 dark:hover:bg-neutral-800 hover:text-slate-600 dark:hover:text-neutral-200 transition-colors shrink-0">
+              <X size={18} />
+            </button>
+          </div>
+
+          <div className="p-6 space-y-5 overflow-y-auto">
+            {/* Formato esperado */}
+            <div className="rounded-xl bg-slate-50 dark:bg-neutral-800/40 border border-slate-100 dark:border-neutral-800 p-3 text-[11px] text-slate-500 dark:text-neutral-400">
+              <p className="font-bold text-slate-600 dark:text-neutral-300 mb-1">Colunas (cabeçalho obrigatório):</p>
+              <code className="block font-mono text-[10px] text-slate-500 dark:text-neutral-400">data; afiliado; cadastros; ftd; cpa; rev; deposito; comissao</code>
+              <p className="mt-1.5">• <b>data</b> obrigatória (1 linha por dia). • <b>afiliado</b> = id ou nome de um afiliado existente; <b>vazio = agregado da casa</b>. • datas/números pt-BR aceitos.</p>
+            </div>
+
+            {/* Entrada */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-neutral-400">Colar planilha / CSV</label>
+                <input ref={fileRef} type="file" accept=".csv,text/csv,text/plain" className="hidden" onChange={(e) => onPickFile(e.target.files?.[0])} />
+                <button onClick={() => fileRef.current?.click()} className="inline-flex items-center gap-1.5 text-[11px] font-bold text-amber-600 dark:text-amber-400 hover:underline">
+                  <Upload size={12} /> Subir arquivo
+                </button>
+              </div>
+              <textarea
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                rows={5}
+                placeholder={'data\tafiliado\tcadastros\tftd\tcpa\trev\tdeposito\tcomissao\n2026-06-01\tJoão Silva\t40\t18\t12\t80\t2.400,00\t2400'}
+                className="w-full px-3 py-2.5 rounded-xl bg-white dark:bg-neutral-800 border border-slate-200 dark:border-neutral-700 text-xs font-mono text-slate-900 dark:text-white placeholder:text-slate-300 dark:placeholder:text-neutral-600 focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 transition-all"
+              />
+            </div>
+
+            {/* Preview / validação */}
+            {analysis && (
+              <div className="space-y-3">
+                <div className="flex flex-wrap gap-2 text-[11px] font-bold">
+                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                    <Check size={12} /> {analysis.rows.length} linha(s) ok
+                  </span>
+                  {parseErrors.length > 0 && (
+                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20">
+                      <AlertTriangle size={12} /> {parseErrors.length} com erro
+                    </span>
+                  )}
+                  {analysis.unresolved.length > 0 && (
+                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                      <AlertTriangle size={12} /> {analysis.unresolved.length} afiliado(s) não encontrado(s)
+                    </span>
+                  )}
+                </div>
+
+                {(parseErrors.length > 0 || analysis.unresolved.length > 0) && (
+                  <div className="rounded-xl bg-red-50 dark:bg-red-950/20 border border-red-100 dark:border-red-900/30 p-3 text-[11px] text-red-600 dark:text-red-400 space-y-0.5 max-h-32 overflow-y-auto">
+                    {parseErrors.slice(0, 8).map((e, i) => <p key={`e${i}`}>Linha {e.line}: {e.message}</p>)}
+                    {analysis.unresolved.slice(0, 8).map((u, i) => <p key={`u${i}`}>Linha {u.line}: afiliado "{u.token}" não encontrado no roster.</p>)}
+                    <p className="text-red-400/70 dark:text-red-500/60 pt-1">Corrija (ou cadastre o afiliado) para liberar a importação.</p>
+                  </div>
+                )}
+
+                {analysis.rows.length > 0 && (
+                  <div className="rounded-xl border border-slate-100 dark:border-neutral-800 overflow-hidden">
+                    <table className="w-full text-[11px]">
+                      <thead className="bg-slate-50 dark:bg-neutral-800/40 text-slate-400 dark:text-neutral-500">
+                        <tr>
+                          {['Data', 'Afiliado', 'Cad', 'FTD', 'CPA', 'REV', 'Depósito', 'Comissão'].map((h) => (
+                            <th key={h} className="px-2 py-1.5 text-left font-bold">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {analysis.rows.slice(0, 8).map((r, i) => (
+                          <tr key={i} className="border-t border-slate-100 dark:border-neutral-800">
+                            <td className="px-2 py-1.5 font-mono text-slate-600 dark:text-neutral-300">{r.date}</td>
+                            <td className="px-2 py-1.5 text-slate-600 dark:text-neutral-300">
+                              {r.affiliateId === null
+                                ? <span className="italic text-slate-400 dark:text-neutral-500">Agregado</span>
+                                : humanizeName(r.affiliateLabel || r.affiliateId)}
+                            </td>
+                            <td className="px-2 py-1.5">{r.registrations}</td>
+                            <td className="px-2 py-1.5">{r.first_deposits}</td>
+                            <td className="px-2 py-1.5">{r.qualified_cpa}</td>
+                            <td className="px-2 py-1.5">{r.rvs}</td>
+                            <td className="px-2 py-1.5">{r.deposit}</td>
+                            <td className="px-2 py-1.5">{r.total_commission}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {analysis.rows.length > 8 && (
+                      <p className="px-2 py-1.5 text-[10px] text-slate-400 dark:text-neutral-500 border-t border-slate-100 dark:border-neutral-800">+{analysis.rows.length - 8} linha(s)…</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Dias já importados */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-neutral-400 flex items-center gap-1.5">
+                  <Calendar size={12} /> Dias importados
+                </h3>
+                {days.length > 0 && (
+                  <button onClick={() => clearDay()} className="text-[10px] font-bold text-red-500 hover:underline">Limpar tudo</button>
+                )}
+              </div>
+              {loadingMeta ? (
+                <p className="text-[11px] text-slate-400 dark:text-neutral-500">Carregando…</p>
+              ) : days.length === 0 ? (
+                <p className="text-[11px] text-slate-400 dark:text-neutral-500">Nenhum resultado importado ainda.</p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
+                  {days.map((d) => (
+                    <span key={d.date} className="group inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-slate-50 dark:bg-neutral-800/60 border border-slate-100 dark:border-neutral-800 text-[11px]">
+                      <span className="font-mono text-slate-600 dark:text-neutral-300">{d.date}</span>
+                      <span className="text-slate-400 dark:text-neutral-500">{d.attributed}{d.aggregate ? '+agg' : ''}</span>
+                      <button onClick={() => clearDay(d.date)} className="text-slate-300 dark:text-neutral-600 hover:text-red-500" title="Limpar dia">
+                        <X size={11} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex gap-3 p-6 pt-4 border-t border-slate-100 dark:border-neutral-800">
+            <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-slate-200 dark:border-neutral-700 text-xs font-bold text-slate-600 dark:text-neutral-300 hover:bg-slate-50 dark:hover:bg-neutral-800 transition-all">
+              Fechar
+            </button>
+            <button
+              onClick={handleImport}
+              disabled={!canImport || importing}
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-amber-500 text-white text-xs font-bold hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              {importing ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+              Confirmar importação
             </button>
           </div>
         </motion.div>
