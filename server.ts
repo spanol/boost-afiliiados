@@ -46,11 +46,11 @@ async function startServer() {
   // cross-origin legítimos (avatares, storage).
   app.use(helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false }));
 
-  // O backoffice de casas envia a logo em base64 no corpo — precisa de um teto
-  // maior. Parser dedicado ANTES do global (escopado em /api/houses): o global de
-  // 32kb vira no-op p/ esse path (express.json não re-parseia req._body). Demais
-  // rotas seguem no limite apertado.
-  app.use('/api/houses', express.json({ limit: '4mb' }));
+  // O backoffice de casas envia a logo (base64) e o import de resultados (planilha)
+  // no corpo — precisam de um teto maior. Parser dedicado ANTES do global (escopado
+  // nesses paths): o global de 32kb vira no-op p/ eles (express.json não re-parseia
+  // req._body). Demais rotas seguem no limite apertado.
+  app.use(['/api/houses', '/api/house-results'], express.json({ limit: '4mb' }));
 
   // SECURITY (LOW): limite explícito do corpo JSON (evita payloads gigantes).
   app.use(express.json({ limit: '32kb' }));
@@ -1361,7 +1361,7 @@ async function startServer() {
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       };
       await adminDb.collection('affiliate_links').doc(code).set(payload);
-      return res.status(201).json({ code, ...payload });
+      return res.status(201).json(payload);
     } catch (e) {
       console.error('[affiliate-links] erro ao criar link:', e);
       return res.status(500).json({ error: 'Erro ao criar o link' });
@@ -1436,6 +1436,7 @@ async function startServer() {
         registerUrlTemplate: null,
         active: b.active !== false,
         order: i,
+        dataSource: b.dataSource ?? 'otg', // sementes vêm da OTG
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
@@ -1454,6 +1455,7 @@ async function startServer() {
       registerUrlTemplate: data.registerUrlTemplate ?? null,
       active: data.active !== false,
       order: Number.isFinite(Number(data.order)) ? Number(data.order) : 0,
+      dataSource: data.dataSource === 'manual' ? 'manual' : 'otg',
     };
   };
 
@@ -1477,7 +1479,7 @@ async function startServer() {
   app.post('/api/houses', requireAdmin, async (req, res) => {
     if (!adminDb) return res.status(500).json({ error: 'Servidor indisponível' });
     try {
-      const { name, brandId, registerUrlTemplate, active, order, logoBase64 } = req.body || {};
+      const { name, brandId, registerUrlTemplate, active, order, dataSource, logoBase64 } = req.body || {};
       const cleanName = String(name ?? '').trim();
       if (!cleanName) return res.status(400).json({ error: 'O nome da casa é obrigatório.' });
       const slug = slugifyHouse(req.body?.slug || cleanName);
@@ -1496,6 +1498,8 @@ async function startServer() {
         registerUrlTemplate: registerUrlTemplate ? String(registerUrlTemplate) : null,
         active: active !== false,
         order: Number.isFinite(Number(order)) ? Number(order) : 0,
+        // Casa nova nasce 'manual' (recebe upload); a OTG fica nas sementes.
+        dataSource: dataSource === 'otg' ? 'otg' : 'manual',
         createdByUid: (req as any).user?.uid ?? null,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -1525,6 +1529,7 @@ async function startServer() {
       if (body.registerUrlTemplate !== undefined) patch.registerUrlTemplate = body.registerUrlTemplate ? String(body.registerUrlTemplate) : null;
       if (body.active !== undefined) patch.active = body.active !== false;
       if (body.order !== undefined && Number.isFinite(Number(body.order))) patch.order = Number(body.order);
+      if (body.dataSource !== undefined) patch.dataSource = body.dataSource === 'otg' ? 'otg' : 'manual';
       if (body.logoBase64) patch.logo = await uploadHouseLogo((snap.data() as any)?.slug ?? ref.id, String(body.logoBase64));
       else if (body.logo === null) patch.logo = null;
       await ref.set(patch, { merge: true });
@@ -1544,6 +1549,123 @@ async function startServer() {
     } catch (e) {
       console.error('[houses] erro ao remover:', e);
       return res.status(500).json({ error: 'Erro ao remover a casa' });
+    }
+  });
+
+  // === Resultados MANUAIS por casa (upload) =================================
+  // Casas 'manual' recebem resultados via planilha. Cada doc = uma linha
+  // (casa, data, afiliado|null=agregado) com as métricas no shape de `results`.
+  // O merge com a OTG é feito no cliente (affiliateService) — aqui só persistimos.
+  // doc id determinístico (casa__data__aff) p/ reimportar ser idempotente.
+  const HR_METRICS = ['registrations', 'first_deposits', 'qualified_cpa', 'rvs', 'deposit', 'total_commission'];
+  const hrDocId = (slug: string, date: string, affiliateId: string | null) =>
+    `${slug}__${date}__${affiliateId ?? 'agg'}`.replace(/\//g, '_');
+  const sanitizeMetrics = (src: any) => {
+    const out: any = {};
+    for (const k of HR_METRICS) out[k] = Number(src?.[k]) || 0;
+    return out;
+  };
+  // Commit em lotes (< 500 ops por batch do Firestore).
+  const commitChunked = async (ops: ((b: admin.firestore.WriteBatch) => void)[]) => {
+    for (let i = 0; i < ops.length; i += 450) {
+      const batch = adminDb!.batch();
+      ops.slice(i, i + 450).forEach((fn) => fn(batch));
+      await batch.commit();
+    }
+  };
+
+  // Lista linhas manuais no range. Admin → todas; afiliado → só as ATRIBUÍDAS a ele
+  // (nunca o agregado/não-atribuído, que revelaria o total da casa).
+  app.get('/api/house-results', requireAuth, async (req, res) => {
+    if (!adminDb) return res.status(500).json({ error: 'Servidor indisponível' });
+    try {
+      const user = (req as any).user;
+      const start = req.query.start ? String(req.query.start) : null;
+      const end = req.query.end ? String(req.query.end) : null;
+      const houseSlug = req.query.houseSlug ? String(req.query.houseSlug) : null;
+      // range de data é single-field (sem índice composto); demais filtros em código.
+      let q: admin.firestore.Query = adminDb.collection('house_results');
+      if (start) q = q.where('date', '>=', start);
+      if (end) q = q.where('date', '<=', end);
+      const snap = await q.get();
+      let rows = snap.docs.map((d) => d.data() as any);
+      if (houseSlug) rows = rows.filter((r) => r.houseSlug === houseSlug);
+      if (user?.role !== 'admin') {
+        const aff = user?.affiliateId ? String(user.affiliateId) : null;
+        rows = aff ? rows.filter((r) => String(r.affiliateId ?? '') === aff) : [];
+      }
+      rows = rows.map((r) => ({
+        houseSlug: r.houseSlug,
+        date: r.date,
+        affiliateId: r.affiliateId ?? null,
+        ...sanitizeMetrics(r),
+      }));
+      return res.json({ rows });
+    } catch (e) {
+      console.error('[house-results] erro ao listar:', e);
+      return res.status(500).json({ error: 'Erro ao listar os resultados' });
+    }
+  });
+
+  // Importa (admin): substitui as linhas da casa nas DATAS presentes no upload
+  // (apaga as antigas daquelas datas e grava as novas) — reenviar um dia sobrescreve.
+  app.post('/api/house-results/import', requireAdmin, async (req, res) => {
+    if (!adminDb) return res.status(500).json({ error: 'Servidor indisponível' });
+    try {
+      const { houseSlug, rows } = req.body || {};
+      const slug = String(houseSlug ?? '').trim();
+      if (!slug) return res.status(400).json({ error: 'houseSlug é obrigatório.' });
+      if (!Array.isArray(rows) || rows.length === 0) return res.status(400).json({ error: 'Nenhuma linha para importar.' });
+
+      const houseSnap = await adminDb.collection('houses').doc(slug).get();
+      if (!houseSnap.exists) return res.status(404).json({ error: 'Casa não encontrada.' });
+
+      // Normaliza e valida as linhas.
+      const dates = new Set<string>();
+      const clean = rows.map((r: any) => {
+        const date = String(r?.date ?? '').trim();
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error(`Data inválida na linha: "${date}".`);
+        dates.add(date);
+        const affiliateId = r?.affiliateId != null && String(r.affiliateId).trim() ? String(r.affiliateId).trim() : null;
+        return { houseSlug: slug, date, affiliateId, ...sanitizeMetrics(r) };
+      });
+
+      // Apaga as linhas existentes da casa nas datas do upload (single-field por
+      // houseSlug, sem índice composto; filtra a data em código).
+      const existing = await adminDb.collection('house_results').where('houseSlug', '==', slug).get();
+      const toDelete = existing.docs.filter((d) => dates.has((d.data() as any)?.date));
+
+      const uid = (req as any).user?.uid ?? null;
+      const importedAt = admin.firestore.FieldValue.serverTimestamp();
+      const ops: ((b: admin.firestore.WriteBatch) => void)[] = [];
+      toDelete.forEach((d) => ops.push((b) => b.delete(d.ref)));
+      clean.forEach((row) => {
+        const ref = adminDb!.collection('house_results').doc(hrDocId(row.houseSlug, row.date, row.affiliateId));
+        ops.push((b) => b.set(ref, { ...row, importedByUid: uid, importedAt }));
+      });
+      await commitChunked(ops);
+
+      return res.json({ ok: true, imported: clean.length, dates: [...dates].sort(), deleted: toDelete.length });
+    } catch (e: any) {
+      console.error('[house-results] erro ao importar:', e);
+      return res.status(500).json({ error: e?.message || 'Erro ao importar os resultados' });
+    }
+  });
+
+  // Limpa as linhas de uma casa (admin); ?date= limpa só aquele dia.
+  app.delete('/api/house-results', requireAdmin, async (req, res) => {
+    if (!adminDb) return res.status(500).json({ error: 'Servidor indisponível' });
+    try {
+      const slug = String(req.query.houseSlug ?? '').trim();
+      if (!slug) return res.status(400).json({ error: 'houseSlug é obrigatório.' });
+      const date = req.query.date ? String(req.query.date) : null;
+      const snap = await adminDb.collection('house_results').where('houseSlug', '==', slug).get();
+      const docs = snap.docs.filter((d) => !date || (d.data() as any)?.date === date);
+      await commitChunked(docs.map((d) => (b: admin.firestore.WriteBatch) => b.delete(d.ref)));
+      return res.json({ ok: true, deleted: docs.length });
+    } catch (e) {
+      console.error('[house-results] erro ao limpar:', e);
+      return res.status(500).json({ error: 'Erro ao limpar os resultados' });
     }
   });
 

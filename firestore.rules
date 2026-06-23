@@ -123,6 +123,14 @@ service cloud.firestore {
       allow read, write: if isAdmin();
     }
 
+    // Resultados MANUAIS por casa (upload de planilha p/ casas 'manual'). Escrito/
+    // lido pelo servidor (Admin SDK): o afiliado lê só as próprias linhas pelo GET
+    // autenticado (/api/house-results), nunca o agregado/não-atribuído. Cliente
+    // direto é bloqueado; admin pode ler/gerir direto.
+    match /house_results/{rowId} {
+      allow read, write: if isAdmin();
+    }
+
     // API keys de parceiros externos (M2M). Só o servidor (Admin SDK) emite/valida
     // — guarda o HASH da key, nunca a key crua. Cliente direto é bloqueado; admin
     // pode ler p/ gestão (vê só o hash + scopes). Ver server.ts (requirePartner).
