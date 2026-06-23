@@ -4,6 +4,7 @@
 // Tudo passa pelo servidor (Admin SDK); o cliente nunca toca `houses` direto.
 import { authFetch } from '../lib/api';
 import { BrandMeta, setKnownBrands } from '../lib/brand';
+import { StoredManualRow, Metrics } from '../lib/houseResults';
 
 export interface House {
   id: string;        // doc id (= slug)
@@ -11,9 +12,11 @@ export interface House {
   name: string;
   brandId?: string | null;         // brandId da OTG quando conhecido
   logo?: string | null;            // URL no Storage (ou /brands/* das sementes)
-  registerUrlTemplate?: string | null; // URL base de cadastro com {ref} (Fase 2 · links)
+  registerUrlTemplate?: string | null; // URL base de cadastro com {ref} (links)
   active: boolean;
   order?: number;
+  // 'otg' = resultados vêm da API externa; 'manual' = alimentados por upload (CSV).
+  dataSource: 'otg' | 'manual';
 }
 
 // Campos editáveis no backoffice. `logoBase64` (data URL) sobe a logo nova; se
@@ -25,6 +28,7 @@ export interface HouseInput {
   registerUrlTemplate?: string | null;
   active?: boolean;
   order?: number;
+  dataSource?: 'otg' | 'manual';
   logoBase64?: string | null;
 }
 
@@ -38,6 +42,7 @@ export function houseToBrandMeta(h: House): BrandMeta {
     registerUrlTemplate: h.registerUrlTemplate ?? null,
     active: h.active,
     order: h.order,
+    dataSource: h.dataSource,
   };
 }
 
@@ -89,4 +94,48 @@ export async function updateHouse(id: string, patch: Partial<HouseInput>): Promi
 export async function deleteHouse(id: string): Promise<void> {
   const response = await authFetch(`/api/houses/${encodeURIComponent(id)}`, { method: 'DELETE' });
   if (!response.ok) await parseError(response);
+}
+
+// --- Resultados manuais por casa --------------------------------------------
+
+// Lista as linhas manuais no range (admin → todas; afiliado → só as dele).
+export async function fetchHouseResults(
+  opts: { start?: string; end?: string; houseSlug?: string } = {}
+): Promise<StoredManualRow[]> {
+  const params = new URLSearchParams();
+  if (opts.start) params.set('start', opts.start);
+  if (opts.end) params.set('end', opts.end);
+  if (opts.houseSlug) params.set('houseSlug', opts.houseSlug);
+  const qs = params.toString();
+  const response = await authFetch(`/api/house-results${qs ? `?${qs}` : ''}`, { headers: { Accept: 'application/json' } });
+  if (!response.ok) return [];
+  const data = await response.json().catch(() => ({}));
+  return Array.isArray((data as any)?.rows) ? (data as any).rows : [];
+}
+
+// Linha de import: data + afiliado (null = agregado) + métricas.
+export type ImportResultRow = { date: string; affiliateId: string | null } & Partial<Metrics>;
+
+// Importa (admin): substitui as linhas da casa nas datas presentes no upload.
+export async function importHouseResults(
+  houseSlug: string,
+  rows: ImportResultRow[]
+): Promise<{ imported: number; dates: string[]; deleted: number }> {
+  const response = await authFetch('/api/house-results/import', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ houseSlug, rows }),
+  });
+  if (!response.ok) await parseError(response);
+  return response.json();
+}
+
+// Limpa as linhas de uma casa (admin); date opcional limpa só aquele dia.
+export async function clearHouseResults(houseSlug: string, date?: string): Promise<number> {
+  const params = new URLSearchParams({ houseSlug });
+  if (date) params.set('date', date);
+  const response = await authFetch(`/api/house-results?${params.toString()}`, { method: 'DELETE' });
+  if (!response.ok) await parseError(response);
+  const data = await response.json().catch(() => ({}));
+  return Number((data as any)?.deleted) || 0;
 }

@@ -45,6 +45,10 @@ export interface BrandMeta {
   registerUrlTemplate?: string | null; // URL base de cadastro com {ref} (gera links)
   active?: boolean; // casa "acesa": listada nas visões por casa (default true)
   order?: number;   // ordem de exibição
+  // Origem dos resultados: 'otg' = vêm da API externa (Superbet/SportingBet);
+  // 'manual' = alimentados por upload (CSV) no backoffice. Só casas 'manual'
+  // recebem import e entram no merge — a OTG nunca é tocada (sem double-count).
+  dataSource?: 'otg' | 'manual';
 }
 
 const normBrandKey = (s?: string | null) => String(s ?? '').trim().toLowerCase();
@@ -58,10 +62,10 @@ const normBrandKey = (s?: string | null) => String(s ?? '').trim().toLowerCase()
 // `betting-house-logos`. Baixamos as oficiais p/ /public/brands.
 // [[boost-external-api-state]]
 export const DEFAULT_BRANDS: BrandMeta[] = [
-  { id: 'clsuperbet000001', slug: 'superbet', name: 'Superbet', logo: '/brands/superbet.png', active: true },
+  { id: 'clsuperbet000001', slug: 'superbet', name: 'Superbet', logo: '/brands/superbet.png', active: true, dataSource: 'otg' },
   // SportingBet: a OTG já LISTA a casa pra agência, mas ela está vazia (0 afiliados)
   // e a nossa x-api-key ainda não traz dados dela — aparece zerada (modelo do portal).
-  { id: 'cmm5dhdqm000e19b58dqc549a', slug: 'sportingbet', name: 'SportingBet', logo: '/brands/sportingbet.png', active: true },
+  { id: 'cmm5dhdqm000e19b58dqc549a', slug: 'sportingbet', name: 'SportingBet', logo: '/brands/sportingbet.png', active: true, dataSource: 'otg' },
 ];
 
 // Compat: alguns lugares ainda importam KNOWN_BRANDS como as casas-semente.
