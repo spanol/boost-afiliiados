@@ -9,9 +9,13 @@
 - **0 fantasma (finding #8):** `buildBrandConfigTopPayload` faz o BrandConfigEditor gravar só taxas configuradas; editar só o REV não cria mais `cpaValue:0`. `saveAffiliateConfig` aceita payload parcial. ✓ testado.
 - **Invariante agregado==Σcards sob filtro (R8):** `composeAdminProfit` unifica headline + cards por casa da MESMA base escopada; o `base` dos cards passou a respeitar o `brandFilter`. Preserva comportamento em "Todas as casas"; corrige o caminho com filtro. ✓ testado COM byBrand, filtro, órfão e casas manuais.
 
-**Adiado conscientemente** (NÃO mexido — exige mudança de camada de dados + verificação no app rodando; arriscado às cegas):
+**Fase 1.1 ENTREGUE** (commits `fe01de4`, `cac8f9a`; 220 testes) — fecha a classe byBrand em R2/R9/R10 com a atribuição afiliado→casa (cada afiliado pertence à sua casa via `brand`), MESMO modelo do `houseOf`/`calcNetProfitByHouse` do /admin:
 
-- **R9 (AffiliateDetails "lucro do afiliado"), R10 (SpecialDashboard/SpecialSubAffiliates ownConfig dropa byBrand) e R2 (ranking server-side ignora byBrand):** os TRÊS compartilham a MESMA raiz — calculam sobre **uma linha agregada por afiliado** (`perAffiliateRows`/`results`/rows do ranking, groupBy=affiliate). Aplicar `byBrand` corretamente exige dados **por afiliado×casa** (novo fetch no service/proxy) + somatório por casa — preservar byBrand no config sozinho não resolve (as chamadas são sem `brandId`). Fazer cego pode introduzir erro de dinheiro pior. **Tarefa única (Fase 1.1):** fetch afiliado×casa + `calcSpecialEarnings`/`computeSubSpread`/`computeRankingEntries` puras, validadas com o app rodando.
+- **`src/lib/commission.ts` (NOVO, puro, sem firebase):** núcleo de comissão (num/resolveBrandRates/rateStatus/calcAffiliatePayout/calcNetProfit) movido p/ fora do affiliateService (que importa o firebase client) e re-exportado — agora o `server.ts` reusa a MESMA fórmula. `src/lib/brand.ts` ganha `buildBrandIdOf` (afiliado→brandId).
+- **R2** (`server.ts` ranking): `src/lib/ranking.ts` `computeRankingEntries` (puro) reusa `calcAffiliatePayout` + aplica byBrand pelo brandId do afiliado (mirror). Antes reimplementava só com a taxa de topo.
+- **R9** (AffiliateDetails "lucro"): direto + spread da rede passam o brandId de cada afiliado.
+- **R10** (SpecialDashboard/SpecialSubAffiliates): `ownConfig` preserva byBrand; payouts/spread/split CPA-REV aplicam a taxa por casa.
+- Passar `brandId` é **no-op** p/ afiliado sem override byBrand → sem regressão (validado no app: lucro de afiliado sem byBrand inalterado). O efeito byBrand fica coberto por unit test (sem afiliado byBrand+produção nos dados p/ ver em tela; o editor multi-casa é dev-gated). `server.ts` (R2) precisa reiniciar p/ valer.
 
 ## 0.1 Status — Fase 2 (segurança/escopo) · em andamento
 
