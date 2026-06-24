@@ -5,12 +5,14 @@ import { Loader2, DollarSign, UserPlus, Wallet, Target, Crown, HelpCircle, Users
 import { useAuth } from '../contexts/AuthContext';
 import {
   fetchSpecialAffiliates,
+  fetchAffiliates,
   fetchAllResults,
   fetchAllResultsByBrand,
   fetchAllResultsByCampaign,
   fetchAllDailyResults,
   fetchAffiliateConfigs,
   calcAffiliatePayout,
+  resolveBrandRates,
   SpecialAffiliate,
   AffiliateConfig,
   CampaignRow,
@@ -22,7 +24,7 @@ import CampaignBreakdown from '../components/CampaignBreakdown';
 import DailyPerformanceChart from '../components/DailyPerformanceChart';
 import AffiliatePerformanceChart from '../components/AffiliatePerformanceChart';
 import { DateRange, getDefaultRange } from '../lib/dateRange';
-import { ALL_BRANDS, getKnownBrandName } from '../lib/brand';
+import { ALL_BRANDS, getKnownBrandName, buildBrandIdOf } from '../lib/brand';
 import { cn, humanizeName } from '../lib/utils';
 
 const brl = (n: number) => `R$ ${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -43,6 +45,7 @@ export default function SpecialDashboard() {
   const [campaignResults, setCampaignResults] = useState<CampaignRow[]>([]);
   const [dailyResults, setDailyResults] = useState<any[]>([]);
   const [configs, setConfigs] = useState<Record<string, AffiliateConfig>>({});
+  const [pool, setPool] = useState<any[]>([]); // mirror p/ afiliado→brandId (byBrand)
 
   const ownId = profile?.affiliateId ? String(profile.affiliateId) : '';
 
@@ -52,13 +55,14 @@ export default function SpecialDashboard() {
       setLoading(true);
       // brand/campaign/daily vão SEM affiliateIds — o proxy escopa à sub-rede do
       // especial (own + subs). Agregados pela API por casa/campanha/dia.
-      const [specials, rows, byBrand, byCampaign, byDay, cfgs] = await Promise.all([
+      const [specials, rows, byBrand, byCampaign, byDay, cfgs, poolData] = await Promise.all([
         fetchSpecialAffiliates(),
         fetchAllResults(range),
         fetchAllResultsByBrand(range),
         fetchAllResultsByCampaign(range),
         fetchAllDailyResults(range),
         fetchAffiliateConfigs(),
+        fetchAffiliates().catch(() => []),
       ]);
       const mine = specials[ownId] || null;
       setSpecial(mine);
@@ -67,6 +71,7 @@ export default function SpecialDashboard() {
       setCampaignResults(Array.isArray(byCampaign) ? byCampaign : []);
       setDailyResults(Array.isArray(byDay) ? byDay : []);
       setConfigs(cfgs);
+      setPool(Array.isArray(poolData) ? poolData : []);
     } catch (err) {
       console.error('Erro ao carregar painel da sub-rede:', err);
       setResults([]);
@@ -86,11 +91,14 @@ export default function SpecialDashboard() {
   // Taxa PRÓPRIA do especial (o CPA/REV que o master configurou pra ele). É a
   // referência do ganho: a agência paga o especial por essa taxa sobre toda a
   // rede; ele repassa cada sub pela taxa que define e fica com o spread.
-  const ownConfig = useMemo<AffiliateConfig>(() => ({
-    affiliateId: ownId,
-    cpaValue: configs[ownId]?.cpaValue || 0,
-    revPercentage: configs[ownId]?.revPercentage || 0,
-  }), [ownId, configs]);
+  // Config PRÓPRIA do especial, PRESERVANDO byBrand (antes era reconstruída só com
+  // cpaValue/revPercentage de topo → a taxa por casa do especial era descartada · R10).
+  const ownConfig = useMemo<AffiliateConfig>(
+    () => configs[ownId] ?? { affiliateId: ownId, cpaValue: 0, revPercentage: 0 },
+    [ownId, configs]
+  );
+  // afiliado→brandId (byBrand) — mesma atribuição afiliado→casa do /admin.
+  const brandIdOf = useMemo(() => buildBrandIdOf(pool), [pool]);
 
   const rowById = (id: string) => results.find((r) => String(r.affiliate_id ?? r.id ?? '') === String(id));
   const ownRow = rowById(ownId);
@@ -116,12 +124,17 @@ export default function SpecialDashboard() {
   }), { registrations: 0, firstDeposits: 0, deposit: 0, qualifiedCpa: 0 });
 
   // Lucro líquido do especial = link dele (produção própria) + lucro da rede (spread).
-  // Spread por sub = taxa própria do especial − taxa que ele definiu pro sub.
-  const ownPayout = calcAffiliatePayout(ownRow, ownConfig);
+  // Spread por sub = taxa própria do especial − taxa que ele definiu pro sub. Aplica a
+  // taxa POR CASA (byBrand) de cada afiliado — no-op p/ quem não tem override (R10).
+  const rowAff = (r: any) => String(r?.affiliate_id ?? r?.id ?? '');
+  // brandId de uma linha de métrica: "Todas as casas" → casa do afiliado da linha
+  // (groupBy=affiliate); casa selecionada → o brandId da própria casa (groupBy=brand).
+  const brandIdForMetric = (r: any) => (isAllBrands ? brandIdOf(rowAff(r)) : String(selectedBrandRow?.id ?? '') || undefined);
+  const ownPayout = calcAffiliatePayout(ownRow, ownConfig, brandIdOf(ownId));
   const spreadTotal = subIds.reduce((sum, id) => {
     const r = rowById(id);
     if (!r) return sum;
-    return sum + (calcAffiliatePayout(r, ownConfig) - calcAffiliatePayout(r, configs[id]));
+    return sum + (calcAffiliatePayout(r, ownConfig, brandIdOf(id)) - calcAffiliatePayout(r, configs[id], brandIdOf(id)));
   }, 0);
   const earnings = ownPayout + spreadTotal;
 
@@ -130,11 +143,13 @@ export default function SpecialDashboard() {
   // Mantém a regra do lucro líquido: tudo à taxa do especial, nunca a comissão bruta da casa.
   // `Rede` = sempre a rede inteira (alimenta o lucro líquido); as versões scopadas
   // abaixo respeitam o filtro de casa e alimentam só a grade de métricas.
-  const comissaoTotalRede = results.reduce((sum, r) => sum + calcAffiliatePayout(r, ownConfig), 0);
+  const comissaoTotalRede = results.reduce((sum, r) => sum + calcAffiliatePayout(r, ownConfig, brandIdOf(rowAff(r))), 0);
   const repasse = comissaoTotalRede - earnings;
-  const comissaoTotal = metricRows.reduce((sum, r) => sum + calcAffiliatePayout(r, ownConfig), 0);
-  const cpaPortion = metricRows.reduce((sum, r) => sum + (r.qualified_cpa || 0) * (ownConfig.cpaValue || 0), 0);
-  const revPortion = metricRows.reduce((sum, r) => sum + (r.rvs || 0) * ((ownConfig.revPercentage || 0) / 100), 0);
+  const comissaoTotal = metricRows.reduce((sum, r) => sum + calcAffiliatePayout(r, ownConfig, brandIdForMetric(r)), 0);
+  // split CPA/REV coerente com o byBrand: resolve a taxa por casa de cada linha (antes
+  // usava só o topo, então a soma CPA+REV podia não bater com a Comissão total).
+  const cpaPortion = metricRows.reduce((sum, r) => sum + (r.qualified_cpa || 0) * resolveBrandRates(ownConfig, brandIdForMetric(r)).cpaValue, 0);
+  const revPortion = metricRows.reduce((sum, r) => sum + (r.rvs || 0) * (resolveBrandRates(ownConfig, brandIdForMetric(r)).revPercentage / 100), 0);
 
   // Cards de métrica (espelham o /admin, capados à rede do especial).
   const metrics = [

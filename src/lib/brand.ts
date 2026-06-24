@@ -18,6 +18,23 @@ export function getBrandName(affiliate: any): string | null {
   return null;
 }
 
+// Resolvedor afiliado→brandId a partir da lista de afiliados (mirror). É a MESMA
+// atribuição afiliado→casa que o /admin usa (brandById): cada afiliado pertence a
+// uma casa (seu `brand`), e o brandId resultante seleciona a taxa POR CASA (byBrand)
+// no calcAffiliatePayout. Preferimos `brand.id` cru; senão resolvemos pelo registro
+// de casas conhecidas (nome→id). Usado por SpecialDashboard/SubAffiliates/AffiliateDetails
+// (R9/R10) e espelha o que o ranking faz no servidor (R2).
+export function buildBrandIdOf(affiliates: any[]): (affiliateId: string) => string | undefined {
+  const map: Record<string, string> = {};
+  for (const a of Array.isArray(affiliates) ? affiliates : []) {
+    const id = String(a?.id ?? a?._id ?? '');
+    if (!id) continue;
+    const bid = a?.brand?.id ?? getBrandMeta(getBrandName(a))?.id;
+    if (bid) map[id] = String(bid);
+  }
+  return (id: string) => map[String(id)];
+}
+
 // Lista ordenada e única das marcas presentes numa coleção de afiliados.
 export function uniqueBrands(affiliates: any[]): string[] {
   const set = new Set<string>();

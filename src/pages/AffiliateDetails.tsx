@@ -64,7 +64,7 @@ import DateRangePicker from '../components/DateRangePicker';
 import InfoTooltip from '../components/InfoTooltip';
 import TrendBadge from '../components/TrendBadge';
 import { DateRange, getDefaultRange, getPreviousRange, percentChange } from '../lib/dateRange';
-import { ALL_BRANDS, getKnownBrandName } from '../lib/brand';
+import { ALL_BRANDS, getKnownBrandName, buildBrandIdOf } from '../lib/brand';
 import { withKnownBrandNames } from '../lib/knownHouses';
 import { cn, humanizeName } from '../lib/utils';
 import { motion } from 'motion/react';
@@ -140,6 +140,9 @@ export default function AffiliateDetails() {
   // lucro líquido do afiliado (ganho dele: direto + spread da rede).
   const [perAffiliateRows, setPerAffiliateRows] = useState<any[]>([]);
   const [allConfigs, setAllConfigs] = useState<Record<string, AffiliateConfig>>({});
+  // Pool de afiliados (mirror) → afiliado→brandId p/ aplicar a taxa POR CASA (byBrand)
+  // no card de lucro do afiliado (R9). Mesma atribuição afiliado→casa do /admin.
+  const [affiliatesPool, setAffiliatesPool] = useState<any[]>([]);
 
   const openSpecial = async () => {
     if (!affiliate) return;
@@ -226,6 +229,8 @@ export default function AffiliateDetails() {
       // O proxy expande o CSV de affiliateIds em params repetidos. [[boost-special-as-scoped-master]]
       const specialsMap = await fetchSpecialAffiliates().catch(() => ({} as Record<string, SpecialAffiliate>));
       setSpecials(specialsMap);
+      // Pool p/ resolver afiliado→brandId (byBrand do lucro). Não-bloqueante.
+      fetchAffiliates().then((p) => setAffiliatesPool(Array.isArray(p) ? p : [])).catch(() => {});
       const subIds = (specialsMap[String(affId)]?.subAffiliateIds || []).map(String);
       const isNetwork = subIds.length > 0;
       const networkIds = [String(affId), ...subIds];
@@ -424,13 +429,17 @@ export default function AffiliateDetails() {
   //   direto = produção própria × taxa dele;
   //   rede   = spread sobre os subs (taxa do especial − taxa do sub), p/ especiais.
   const isSuperiorView = isAdmin || (!!profile?.isSpecial && String(id) !== String(profile?.affiliateId));
+  // Aplica a taxa POR CASA (byBrand) de cada afiliado, igual ao lucro da agência no
+  // /admin — antes usava só a taxa de topo e divergia (R9). No-op p/ quem não tem
+  // override byBrand. brandIdOf resolve a casa de cada afiliado pelo mirror.
+  const brandIdOf = buildBrandIdOf(affiliatesPool);
   const lucro = (() => {
     const rowFor = (tid: string) => perAffiliateRows.find((r) => String(r?.id ?? r?.affiliate_id ?? '') === String(tid));
     const subIds = (specials[String(id)]?.subAffiliateIds || []).map(String);
-    const direto = calcAffiliatePayout(rowFor(String(id)), config);
+    const direto = calcAffiliatePayout(rowFor(String(id)), config, brandIdOf(String(id)));
     const rede = subIds.reduce((sum, sid) => {
       const r = rowFor(sid);
-      return r ? sum + (calcAffiliatePayout(r, config) - calcAffiliatePayout(r, allConfigs[sid])) : sum;
+      return r ? sum + (calcAffiliatePayout(r, config, brandIdOf(sid)) - calcAffiliatePayout(r, allConfigs[sid], brandIdOf(sid))) : sum;
     }, 0);
     return { direto, rede, total: direto + rede, hasRede: subIds.length > 0 };
   })();

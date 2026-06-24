@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import {
   fetchSpecialAffiliates,
+  fetchAffiliates,
   fetchAllResults,
   fetchAffiliateConfigs,
   saveSubAffiliateConfig,
@@ -14,7 +15,7 @@ import {
 } from '../services/affiliateService';
 import DateRangePicker from '../components/DateRangePicker';
 import BrandFilter from '../components/BrandFilter';
-import { getBrandName, uniqueBrands, ALL_BRANDS } from '../lib/brand';
+import { getBrandName, uniqueBrands, ALL_BRANDS, buildBrandIdOf } from '../lib/brand';
 import { DateRange, getDefaultRange } from '../lib/dateRange';
 import { cn, humanizeName } from '../lib/utils';
 
@@ -34,6 +35,7 @@ export default function SpecialSubAffiliates() {
   const [special, setSpecial] = useState<SpecialAffiliate | null>(null);
   const [results, setResults] = useState<any[]>([]);
   const [configs, setConfigs] = useState<Record<string, AffiliateConfig>>({});
+  const [pool, setPool] = useState<any[]>([]); // mirror p/ afiliado→brandId (byBrand)
   // Edição da comissão de cada sub (CPA/REV), com teto = taxa própria do especial.
   const [subEdits, setSubEdits] = useState<Record<string, { cpaValue: number | string; revPercentage: number | string }>>({});
   const [savingSub, setSavingSub] = useState<string | null>(null);
@@ -50,15 +52,17 @@ export default function SpecialSubAffiliates() {
     if (!ownId) return;
     try {
       setLoading(true);
-      const [specials, rows, cfgs] = await Promise.all([
+      const [specials, rows, cfgs, poolData] = await Promise.all([
         fetchSpecialAffiliates(),
         fetchAllResults(range),
         fetchAffiliateConfigs(),
+        fetchAffiliates().catch(() => []),
       ]);
       const mine = specials[ownId] || null;
       setSpecial(mine);
       setResults(Array.isArray(rows) ? rows : []);
       setConfigs(cfgs);
+      setPool(Array.isArray(poolData) ? poolData : []);
       // semente dos inputs editáveis a partir dos configs salvos
       const seed: Record<string, { cpaValue: number | string; revPercentage: number | string }> = {};
       (mine?.subAffiliateIds || []).forEach((id) => {
@@ -79,11 +83,12 @@ export default function SpecialSubAffiliates() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ownId, range.startDate, range.endDate]);
 
-  const ownConfig = useMemo<AffiliateConfig>(() => ({
-    affiliateId: ownId,
-    cpaValue: configs[ownId]?.cpaValue || 0,
-    revPercentage: configs[ownId]?.revPercentage || 0,
-  }), [ownId, configs]);
+  // Config própria do especial PRESERVANDO byBrand (antes descartava a taxa por casa · R10).
+  const ownConfig = useMemo<AffiliateConfig>(
+    () => configs[ownId] ?? { affiliateId: ownId, cpaValue: 0, revPercentage: 0 },
+    [ownId, configs]
+  );
+  const brandIdOf = useMemo(() => buildBrandIdOf(pool), [pool]);
 
   const rowById = (id: string) => results.find((r) => String(r.affiliate_id ?? r.id ?? '') === String(id));
   const subIds = special?.subAffiliateIds?.map(String) || [];
@@ -270,8 +275,9 @@ export default function SpecialSubAffiliates() {
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-neutral-800 text-xs">
                     {filteredSubs.map(({ id, row: r, name, producing }) => {
-                      // Seu ganho = spread (taxa própria − taxa do sub) sobre a produção dele.
-                      const spread = calcAffiliatePayout(r, ownConfig) - calcAffiliatePayout(r, configs[id]);
+                      // Seu ganho = spread (taxa própria − taxa do sub) sobre a produção
+                      // dele, na taxa POR CASA (byBrand) do sub — no-op sem override (R10).
+                      const spread = calcAffiliatePayout(r, ownConfig, brandIdOf(id)) - calcAffiliatePayout(r, configs[id], brandIdOf(id));
                       return (
                         <tr
                           key={id}

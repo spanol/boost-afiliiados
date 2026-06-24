@@ -1,7 +1,7 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import {
   getBrandName, uniqueBrands, ALL_BRANDS, getBrandMeta, getBrandLogo, KNOWN_BRANDS,
-  DEFAULT_BRANDS, getKnownBrands, setKnownBrands,
+  DEFAULT_BRANDS, getKnownBrands, setKnownBrands, buildBrandIdOf,
 } from './brand';
 import { withKnownHouses, withKnownBrandNames } from './knownHouses';
 
@@ -24,6 +24,32 @@ describe('getBrandName', () => {
     expect(getBrandName({})).toBeNull();
     expect(getBrandName(null)).toBeNull();
     expect(getBrandName({ brand: '' })).toBeNull();
+  });
+});
+
+describe('buildBrandIdOf (R9/R10 · afiliado→brandId p/ byBrand)', () => {
+  afterEach(() => setKnownBrands(null)); // restaura as casas-semente
+
+  it('usa brand.id cru quando presente', () => {
+    const of = buildBrandIdOf([{ id: 'a1', brand: { id: 'clsuperbet000001', name: 'Superbet' } }]);
+    expect(of('a1')).toBe('clsuperbet000001');
+  });
+
+  it('resolve pelo nome quando não há brand.id (via registro de casas)', () => {
+    const of = buildBrandIdOf([{ id: 'a2', brand: { name: 'SportingBet' } }]);
+    expect(of('a2')).toBe('cmm5dhdqm000e19b58dqc549a'); // brandId semente da SportingBet
+  });
+
+  it('aceita _id e devolve undefined p/ afiliado desconhecido / sem marca', () => {
+    const of = buildBrandIdOf([{ _id: 'a3', brand: { id: 'x' } }, { id: 'semMarca' }]);
+    expect(of('a3')).toBe('x');
+    expect(of('semMarca')).toBeUndefined();
+    expect(of('naoExiste')).toBeUndefined();
+  });
+
+  it('tolera lista vazia/não-array', () => {
+    expect(buildBrandIdOf(null as any)('a')).toBeUndefined();
+    expect(buildBrandIdOf([])('a')).toBeUndefined();
   });
 });
 
