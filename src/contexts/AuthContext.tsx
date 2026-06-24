@@ -39,6 +39,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (currentUser) {
+        // R14: na TROCA de conta (A→B), até o profile do novo usuário chegar, não
+        // exponha o perfil/loading do anterior — senão o ProtectedRoute roteia com o
+        // papel errado (user=B, profile=A, loading=false). Volta a "carregando" e
+        // limpa o perfil obsoleto; o snapshot abaixo seta os dois. (No 1º login já é
+        // o estado inicial; updates de profile NÃO repassam aqui, só o snapshot.)
+        setProfile(null);
+        setLoading(true);
         const path = `users/${currentUser.uid}`;
         try {
           const docRef = doc(db, 'users', currentUser.uid);
