@@ -12,6 +12,7 @@ Originated as a Google AI Studio applet (see README / `firebase-applet-config.js
 
 - **`INTEGRATION-PLAN.md`** — current roadmap: data sources (v2 ✅ / v1 ❌ / Firebase), Fase 0 (done), trilhas A–D, blockers, and the recommended next step (**B2 · date filters**, which also fixes the OTG×Boost commission discrepancy). The external **v1 API is NOT accessible** with our `x-api-key` (401); clicks/wager/channels/payment-cycle are blocked pending OTG access.
 - **`BACKLOG.md`** — sketches B1 (lucro líquido), B2 (date filters), B3 (sub-affiliates), B4 (banking data), B5 (admin access/visibility settings).
+- **`REVIEW-TEST-PLAN.md`** — plano de revisão total + testes (auditoria 2026-06). §0/§0.1 rastreiam o que já foi corrigido (Fase 1 money-math, Fase 1.1 byBrand, Fase 2 segurança) e o que falta (Fases 3-5: testes de services/páginas, tooling/CI, emulator de rules, supertest). **Leia antes de continuar a revisão.**
 - **`public/mvp-inventario.html`** — static page (served at `/mvp-inventario.html`) cataloguing OTG dashboard data for the boss to qualify MVP scope.
 
 ## Commands
@@ -72,6 +73,32 @@ The external API has inconsistent response shapes, so `affiliateService.ts` is d
 - `fetchAffiliateById` falls back to scanning the full affiliate list when the by-id endpoint 404s or returns no data.
 
 When touching affiliate data fetching, preserve these fallbacks rather than assuming a single canonical shape.
+
+## Invariantes de domínio & convenções — LEIA antes de mexer em dinheiro/segurança
+
+Esta seção destila os bugs reais que escaparam dos testes (auditoria 2026-06) e os padrões que os impedem. **Quebrar um destes invariantes é uma regressão**, mesmo com os testes passando.
+
+### Comissão/dinheiro: fonte ÚNICA em `src/lib/commission.ts`
+- O núcleo de comissão é **puro e sem Firebase**: `num`, `resolveBrandRates`, `rateStatus`, `calcAffiliatePayout`, `calcNetProfit` (+ tipos `AffiliateConfig`/`BrandRates`). `affiliateService.ts` re-exporta tudo — importe de `services/affiliateService` (client) ou direto de `src/lib/commission` (server). **NUNCA reimplemente a fórmula inline** numa página ou rota: foi a causa de TODOS os bugs de dinheiro (7c1c830, a0dc467, R2, R9, R10).
+- **`server.ts` NÃO pode importar `services/affiliateService`** (puxa o Firebase client no boot). O servidor importa só de `src/lib/{commission,scope,ranking,brand,...}`. Toda lógica que o server precisar reusar tem que viver em `src/lib`.
+- **Taxa POR CASA (`byBrand[brandId]`) sobrepõe a de topo.** Resolva o brandId do afiliado com `buildBrandIdOf` (client) ou pelo mirror `affiliates` (server) — modelo "1 afiliado → 1 casa" (campo `brand`), o MESMO que `houseOf`/`calcNetProfitByHouse` do /admin. Passar `brandId` a `calcAffiliatePayout` é **no-op** p/ quem não tem override → seguro adicionar em qualquer call-site.
+- **Ausência de config ≠ R$0.** Use `rateStatus(config, brandId)` (detecta `typeof number`) p/ decidir "configurado" vs "não configurado" no display — nunca `cpaValue || 0`, que mostra um zero enganoso.
+- **Invariante "agregado == Σ dos cards".** O headline de lucro e o detalhamento por casa SAEM DA MESMA base escopada (`composeAdminProfit`); ao filtrar por marca, os dois escopam juntos.
+- **Nunca propague NaN.** A API externa manda número como string às vezes; `num()` coage antes de multiplicar.
+- **Lucro líquido/margem da agência só no `/admin` do master** — nunca na view do afiliado (`ClientDashboard`/sua própria `AffiliateDetails`).
+
+### Segurança/escopo
+- **Dado sensível (taxas, PII) é mediado pelo servidor (Admin SDK) + rule `admin-only`; o cliente NUNCA lê direto.** Ex.: `affiliate_configs` → `GET /api/affiliate-configs` (escopa por papel: admin=todas; afiliado=própria+sub-rede). Espelha `payment_profiles`/`houses`. Ao adicionar dado sensível, siga este padrão (não `read: isSignedIn()`).
+- **IDOR do proxy:** `resolveScopedAffiliateIds` (`src/lib/scope.ts`) é a barreira — não-admin só lê o próprio id / sub-rede do especial. Teste qualquer mudança de escopo nele.
+- **`resolveIsSpecial` (= `active === true`) é a definição ÚNICA** de especial ativo. Não reescreva `active !== false`/`=== true` inline.
+- **Campos server-only no `users/{uid}`:** `role`, `affiliateId`, `isSpecial` — as rules travam o self-update deles. Não os exponha a escrita do cliente.
+- **Datas no servidor:** `resolveServerToday` (fuso `America/Sao_Paulo`), nunca `new Date().toISOString()` (Cloud Run = UTC → corta o dia errado à noite BR).
+
+### Testabilidade & processo
+- **Lógica testável vive em `src/lib/*` com teste colocado** (`*.test.ts`, descrições pt-BR, mock de `lib/firebase` e `lib/api`). Ao corrigir dinheiro/escopo numa página/rota, **extraia a função pura** e teste-a — não deixe a regra só no JSX/handler.
+- **`vitest.config.ts` `coverage.include` EXCLUI `pages/` e `server.ts`** (dívida conhecida — Fase 5 do REVIEW-TEST-PLAN). A métrica global esconde a superfície de maior risco; não confie nela como prova de cobertura.
+- **`server.ts` roda código ANTIGO até reiniciar o processo** (`tsx server.ts`, sem watch) — mudanças no servidor não aparecem no app rodando até `kill` + `npm run dev`. O frontend tem HMR (Vite middleware), então mudanças de página/lib aparecem na hora.
+- **Verificação no app usa o Firestore de PROD + rules DEPLOYADAS** (o client SDK fala direto com o Firestore). Mudança de `firestore.rules` só vale após `firebase deploy --only firestore:rules` (deploy é ação do operador).
 
 ## Configuration & conventions
 
