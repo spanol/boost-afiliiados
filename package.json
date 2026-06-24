@@ -12,6 +12,7 @@
     "lint": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-boost-rules-test \"vitest run --config vitest.rules.config.ts\"",
     "coverage": "vitest run --coverage"
   },
   "dependencies": {
