@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import {
   Users,
@@ -6,6 +6,7 @@ import {
   Filter,
   RefreshCw,
   AlertCircle,
+  Info,
   Loader2,
   Save,
   CheckCircle,
@@ -26,7 +27,7 @@ import BrandFilter from '../components/BrandFilter';
 import { getBrandName, uniqueBrands, ALL_BRANDS, getKnownBrandName } from '../lib/brand';
 import { normalizeNameKey } from '../lib/affiliateName';
 import { useAuth } from '../contexts/AuthContext';
-import { useNavigate, Navigate } from 'react-router-dom';
+import { useNavigate, Navigate, Link } from 'react-router-dom';
 
 interface Affiliate {
   id: string;
@@ -72,6 +73,14 @@ export default function AffiliatesList() {
   const [importing, setImporting] = useState(false);
   const [invitingId, setInvitingId] = useState<string | null>(null);
   const [inviteModal, setInviteModal] = useState<{ open: boolean; name?: string; url?: string }>({ open: false });
+
+  // Ênfase de setup: ids que JÁ têm doc de config persistido. Distingue "config
+  // pendente" (sem doc) de um afiliado salvo de propósito em 0/0 — sem isso a
+  // tela mostra 0/0 mudo p/ ambos e esconde quem ainda falta configurar (foi o
+  // que mascarou o caso do especial superfaturado). Estável contra digitação
+  // (handleConfigChange mexe em `configs`, não aqui); atualiza só no save.
+  const [savedConfigIds, setSavedConfigIds] = useState<Set<string>>(new Set());
+  const [onlyNeedsConfig, setOnlyNeedsConfig] = useState(false);
 
   const isAdmin = profile?.role === 'admin';
   const pageTitle = isAdmin ? 'Gestão de Afiliados' : 'Meus Clientes';
@@ -166,6 +175,7 @@ export default function AffiliatesList() {
 
       setAffiliates([...uniqueAffiliates, ...pendingItems]);
       setConfigs(configData);
+      setSavedConfigIds(new Set(Object.keys(configData)));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao carregar dados da API');
     } finally {
@@ -257,6 +267,7 @@ export default function AffiliatesList() {
         revPercentage: Number(raw.revPercentage) || 0,
       };
       await saveAffiliateConfig(config);
+      setSavedConfigIds((prev) => new Set(prev).add(affiliateId));
       setSavedId(affiliateId);
       setTimeout(() => setSavedId(null), 2000);
     } catch (err) {
@@ -277,7 +288,8 @@ export default function AffiliatesList() {
         return matchesSearch && matchesBrand;
       })
     : [];
-  const visibleAffiliates = isAdmin ? filteredAffiliates : [];
+  // `visibleAffiliates` é calculado abaixo (depois de ownerBySubId), pois o
+  // filtro "só pendentes" depende de needsConfig, que ignora subs de especial.
 
   // Mapa sub-afiliado → afiliado especial dono (só especiais ATIVOS). Usado para
   // exibir o badge "Pertence a <especial>" em cada parceiro vinculado a uma rede.
@@ -294,6 +306,21 @@ export default function AffiliatesList() {
     });
     return map;
   }, [specials, affiliates]);
+
+  // --- Ênfase de setup (A) ----------------------------------------------------
+  const idOf = (item: any) => String(item.id ?? item._id ?? '');
+  // "Config pendente": sem doc de config persistido. Exclui pré-cadastros (têm
+  // fluxo próprio) e subs de especial ATIVO — o repasse do sub usa a taxa do
+  // especial-pai, então a falta de config própria do sub NÃO é problema.
+  const needsConfig = (item: any) =>
+    !item.isPending && !ownerBySubId[idOf(item)] && !savedConfigIds.has(idOf(item));
+  // "Sem acesso": sem login vinculado (ainda não cadastrou o próprio acesso).
+  const needsAccess = (item: any) => !item.isPending && !item.userUid;
+
+  const needsConfigCount = isAdmin ? filteredAffiliates.filter(needsConfig).length : 0;
+  const visibleAffiliates = isAdmin
+    ? (onlyNeedsConfig ? filteredAffiliates.filter(needsConfig) : filteredAffiliates)
+    : [];
 
   const handleOpenDetails = (affiliate: any) => {
     navigate(`/affiliates/${affiliate.id}`);
@@ -421,12 +448,15 @@ export default function AffiliatesList() {
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
             {isAdmin ? 'Rede de parceiros' : 'Sua carteira'}
           </span>
-          <h1 className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white tracking-tighter flex items-center gap-3">
-            <span className="p-2 rounded-xl bg-slate-50 dark:bg-neutral-800/60 border border-slate-100 dark:border-neutral-700/60">
-              <Users size={24} className="text-slate-900 dark:text-white" />
-            </span>
-            {pageTitle}
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-3xl md:text-4xl font-bold text-slate-900 dark:text-white tracking-tighter flex items-center gap-3">
+              <span className="p-2 rounded-xl bg-slate-50 dark:bg-neutral-800/60 border border-slate-100 dark:border-neutral-700/60">
+                <Users size={24} className="text-slate-900 dark:text-white" />
+              </span>
+              {pageTitle}
+            </h1>
+            {isAdmin && <ListingHelp />}
+          </div>
           <p className="text-slate-500 dark:text-neutral-400 text-sm mt-2">{pageSubTitle}</p>
         </div>
         <div className="flex items-center gap-2">
@@ -477,6 +507,21 @@ export default function AffiliatesList() {
             />
           </div>
           <div className="flex items-center gap-3 flex-wrap">
+            {isAdmin && needsConfigCount > 0 && (
+              <button
+                onClick={() => setOnlyNeedsConfig((v) => !v)}
+                title="Afiliados sem comissão (CPA/REV) configurada — repasse fica R$ 0"
+                className={cn(
+                  'flex items-center gap-1.5 px-3 py-2 rounded-full text-[11px] font-bold uppercase tracking-wider border transition-all',
+                  onlyNeedsConfig
+                    ? 'bg-amber-500 text-white border-amber-500 shadow-sm'
+                    : 'bg-amber-50 dark:bg-amber-900/10 text-amber-700 dark:text-amber-400 border-amber-200/70 dark:border-amber-900/40 hover:border-amber-400'
+                )}
+              >
+                <AlertCircle size={13} />
+                {needsConfigCount} sem configuração
+              </button>
+            )}
             <BrandFilter brands={availableBrands} value={brandFilter} onChange={setBrandFilter} />
             <button className="p-2.5 rounded-full border border-slate-200 dark:border-neutral-700 text-slate-500 dark:text-neutral-300 hover:text-amber-500 hover:border-amber-500/40 transition-colors">
               <Filter size={16} />
@@ -537,6 +582,7 @@ export default function AffiliatesList() {
                 {visibleAffiliates.map((item: any) => {
                   const affiliateId = item.id || item._id;
                   const config = configs[affiliateId] || { affiliateId, cpaValue: 0, revPercentage: 0 };
+                  const pendingCfg = needsConfig(item);
 
                   return (
                     <tr
@@ -557,6 +603,16 @@ export default function AffiliatesList() {
                           {item.isPending && (
                             <span className="inline-flex w-fit items-center gap-1 px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-900/30 border border-amber-200/70 dark:border-amber-900/50 text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400">
                               <Clock size={10} /> Pré-cadastro
+                            </span>
+                          )}
+                          {pendingCfg && (
+                            <span className="inline-flex w-fit items-center gap-1 px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-900/30 border border-amber-200/70 dark:border-amber-900/50 text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                              <AlertCircle size={10} /> Config pendente
+                            </span>
+                          )}
+                          {needsAccess(item) && (
+                            <span className="inline-flex w-fit items-center gap-1 px-2 py-0.5 rounded-md border border-slate-300 dark:border-neutral-600 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-neutral-400">
+                              <UserPlus size={10} /> Sem acesso
                             </span>
                           )}
                           {ownerBySubId[String(affiliateId)] && (
@@ -628,7 +684,10 @@ export default function AffiliatesList() {
                                 step="0.01"
                                 value={config.cpaValue}
                                 onChange={(e) => handleConfigChange(affiliateId, 'cpaValue', e.target.value)}
-                                className="w-24 pl-7 pr-2 py-1.5 bg-slate-50 dark:bg-neutral-800/60 border border-slate-200 dark:border-neutral-700 rounded-lg text-[11px] font-bold outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all dark:text-white"
+                                className={cn(
+                                  "w-24 pl-7 pr-2 py-1.5 border rounded-lg text-[11px] font-bold outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all dark:text-white",
+                                  pendingCfg ? "border-amber-400 dark:border-amber-500/60 bg-amber-50/60 dark:bg-amber-900/10" : "border-slate-200 dark:border-neutral-700 bg-slate-50 dark:bg-neutral-800/60"
+                                )}
                               />
                             </div>
                           </td>
@@ -642,12 +701,25 @@ export default function AffiliatesList() {
                                 step="0.1"
                                 value={config.revPercentage}
                                 onChange={(e) => handleConfigChange(affiliateId, 'revPercentage', e.target.value)}
-                                className="w-24 pl-6 pr-2 py-1.5 bg-slate-50 dark:bg-neutral-800/60 border border-slate-200 dark:border-neutral-700 rounded-lg text-[11px] font-bold outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all dark:text-white"
+                                className={cn(
+                                  "w-24 pl-6 pr-2 py-1.5 border rounded-lg text-[11px] font-bold outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all dark:text-white",
+                                  pendingCfg ? "border-amber-400 dark:border-amber-500/60 bg-amber-50/60 dark:bg-amber-900/10" : "border-slate-200 dark:border-neutral-700 bg-slate-50 dark:bg-neutral-800/60"
+                                )}
                               />
                             </div>
                           </td>
                           <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center justify-end gap-2">
+                              {needsAccess(item) && (
+                                <button
+                                  onClick={(e) => handleGenerateInvite(item, e)}
+                                  disabled={invitingId === affiliateId}
+                                  title="Gerar convite de acesso para o afiliado"
+                                  className="p-2 rounded-lg bg-slate-50 text-slate-400 hover:text-amber-500 dark:bg-neutral-800/60 dark:text-neutral-500 dark:hover:text-amber-400 transition-all disabled:opacity-50"
+                                >
+                                  {invitingId === affiliateId ? <Loader2 size={14} className="animate-spin" /> : <UserPlus size={14} />}
+                                </button>
+                              )}
                               <button
                                 onClick={(e) => { e.stopPropagation(); handleOpenSpecial(item); }}
                                 title={specials[affiliateId]?.active ? 'Afiliado especial — gerir sub-rede' : 'Tornar afiliado especial'}
@@ -694,6 +766,7 @@ export default function AffiliatesList() {
             {visibleAffiliates.map((item: any) => {
               const affiliateId = item.id || item._id;
               const config = configs[affiliateId] || { affiliateId, cpaValue: 0, revPercentage: 0 };
+              const pendingCfg = needsConfig(item);
               return (
                 <div key={affiliateId || Math.random()} className={cn("p-4 space-y-4", item.isPending && "bg-amber-50/40 dark:bg-amber-900/[0.06]")}>
                   <div className={cn(!item.isPending && "cursor-pointer")} onClick={() => { if (!item.isPending) handleOpenDetails(item); }}>
@@ -708,6 +781,16 @@ export default function AffiliatesList() {
                     {item.isPending && (
                       <span className="inline-flex mt-1 ml-1 items-center gap-1 px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-900/30 border border-amber-200/70 dark:border-amber-900/50 text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400">
                         <Clock size={10} /> Pré-cadastro
+                      </span>
+                    )}
+                    {pendingCfg && (
+                      <span className="inline-flex mt-1 ml-1 items-center gap-1 px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-900/30 border border-amber-200/70 dark:border-amber-900/50 text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+                        <AlertCircle size={10} /> Config pendente
+                      </span>
+                    )}
+                    {needsAccess(item) && (
+                      <span className="inline-flex mt-1 ml-1 items-center gap-1 px-2 py-0.5 rounded-md border border-slate-300 dark:border-neutral-600 text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-neutral-400">
+                        <UserPlus size={10} /> Sem acesso
                       </span>
                     )}
                     {ownerBySubId[String(affiliateId)] && (
@@ -771,7 +854,10 @@ export default function AffiliatesList() {
                               type="number" min="0" step="0.01"
                               value={config.cpaValue}
                               onChange={(e) => handleConfigChange(affiliateId, 'cpaValue', e.target.value)}
-                              className="w-full pl-7 pr-2 py-2 bg-slate-50 dark:bg-neutral-800/60 border border-slate-200 dark:border-neutral-700 rounded-lg text-xs font-bold outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all dark:text-white"
+                              className={cn(
+                                "w-full pl-7 pr-2 py-2 border rounded-lg text-xs font-bold outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all dark:text-white",
+                                pendingCfg ? "border-amber-400 dark:border-amber-500/60 bg-amber-50/60 dark:bg-amber-900/10" : "border-slate-200 dark:border-neutral-700 bg-slate-50 dark:bg-neutral-800/60"
+                              )}
                             />
                           </div>
                         </label>
@@ -783,7 +869,10 @@ export default function AffiliatesList() {
                               type="number" min="0" max="100" step="0.1"
                               value={config.revPercentage}
                               onChange={(e) => handleConfigChange(affiliateId, 'revPercentage', e.target.value)}
-                              className="w-full pl-6 pr-2 py-2 bg-slate-50 dark:bg-neutral-800/60 border border-slate-200 dark:border-neutral-700 rounded-lg text-xs font-bold outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all dark:text-white"
+                              className={cn(
+                                "w-full pl-6 pr-2 py-2 border rounded-lg text-xs font-bold outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-all dark:text-white",
+                                pendingCfg ? "border-amber-400 dark:border-amber-500/60 bg-amber-50/60 dark:bg-amber-900/10" : "border-slate-200 dark:border-neutral-700 bg-slate-50 dark:bg-neutral-800/60"
+                              )}
                             />
                           </div>
                         </label>
@@ -813,6 +902,16 @@ export default function AffiliatesList() {
                         <Crown size={14} />
                         {specials[affiliateId]?.active ? 'Afiliado especial' : 'Tornar especial'}
                       </button>
+                      {needsAccess(item) && (
+                        <button
+                          onClick={(e) => handleGenerateInvite(item, e)}
+                          disabled={invitingId === affiliateId}
+                          className="w-full py-2.5 rounded-xl text-xs font-bold flex items-center justify-center gap-2 border border-slate-200 dark:border-neutral-700 text-slate-600 dark:text-neutral-300 hover:border-amber-500/40 transition-all disabled:opacity-50"
+                        >
+                          {invitingId === affiliateId ? <Loader2 size={14} className="animate-spin" /> : <UserPlus size={14} />}
+                          Gerar acesso
+                        </button>
+                      )}
                     </>
                   ))}
                 </div>
@@ -833,5 +932,52 @@ export default function AffiliatesList() {
         </div>
       </div>
     </div>
+  );
+}
+
+// Popover de ajuda (i): explica os requisitos p/ um afiliado constar e ficar
+// operacional nesta lista, e que aprovados sem produção ficam no Roster OTG.
+// Click-toggle (conteúdo rico + link), fecha ao clicar fora. O InfoTooltip
+// padrão é só texto/hover, por isso este é dedicado.
+function ListingHelp() {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [open]);
+
+  return (
+    <span ref={ref} className="relative inline-flex align-middle">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-label="Como um afiliado fica operacional aqui"
+        className="text-slate-400 hover:text-amber-500 dark:text-neutral-500 dark:hover:text-amber-400 transition-colors"
+      >
+        <Info size={18} />
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full mt-3 z-40 w-[20rem] max-w-[calc(100vw_-_2rem)] rounded-2xl border border-slate-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 p-4 text-left shadow-xl normal-case tracking-normal">
+          <p className="text-xs font-bold text-slate-900 dark:text-white">Como um afiliado fica operacional aqui</p>
+          <p className="mt-1.5 text-[11px] leading-relaxed font-medium text-slate-500 dark:text-neutral-400">
+            Para constar nesta lista e gerar repasse correto, ele precisa de:
+          </p>
+          <ol className="mt-2 space-y-1.5 text-[11px] leading-relaxed font-medium text-slate-600 dark:text-neutral-300">
+            <li className="flex gap-2"><span className="font-bold text-amber-600 dark:text-amber-400">1.</span><span><b>Produção</b> — aparecer no relatório da OTG (ou estar como pré-cadastro).</span></li>
+            <li className="flex gap-2"><span className="font-bold text-amber-600 dark:text-amber-400">2.</span><span><b>Acesso</b> — um login gerado via convite.</span></li>
+            <li className="flex gap-2"><span className="font-bold text-amber-600 dark:text-amber-400">3.</span><span><b>Comissão</b> — CPA/REV configurados. Sem isso, o repasse fica <b>R$&nbsp;0</b>.</span></li>
+          </ol>
+          <p className="mt-3 pt-3 border-t border-slate-100 dark:border-neutral-800 text-[11px] leading-relaxed font-medium text-slate-500 dark:text-neutral-400">
+            Aprovados na OTG <b>sem produção</b> ainda não aparecem aqui — ficam em{' '}
+            <Link to="/roster-otg" className="font-bold text-amber-600 dark:text-amber-400 hover:underline">Roster OTG</Link> até reconciliar.
+          </p>
+        </div>
+      )}
+    </span>
   );
 }
