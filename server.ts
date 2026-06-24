@@ -10,6 +10,8 @@ import { fileURLToPath } from 'url';
 import { renderErrorPage } from './errorPage';
 import { isBotUserAgent, appendSubid, clickStatDay } from './src/lib/tracking';
 import { resolveIsSpecial, resolveServerToday, resolveScopedAffiliateIds } from './src/lib/scope';
+import { computeRankingEntries } from './src/lib/ranking';
+import type { AffiliateConfig } from './src/lib/commission';
 import { DEFAULT_BRANDS } from './src/lib/brand';
 import { projectPartnerResults } from './src/lib/partnerResults';
 import { pullApprovedRoster, isOtgLinksConfigured } from './otgLinksPull';
@@ -779,30 +781,31 @@ async function startServer() {
         page++;
       } while (page <= totalPages && page <= MAX_PAGES);
 
-      // Configs (taxa por afiliado) e nomes do mirror.
+      // Configs (taxa por afiliado, COM byBrand) e nome+marca do mirror.
       const [cfgSnap, affSnap] = await Promise.all([
         adminDb.collection('affiliate_configs').get(),
         adminDb.collection('affiliates').get(),
       ]);
-      const configs: Record<string, { cpaValue: number; revPercentage: number }> = {};
-      cfgSnap.forEach((d) => { const v = d.data() as any; configs[d.id] = { cpaValue: Number(v?.cpaValue) || 0, revPercentage: Number(v?.revPercentage) || 0 }; });
+      // Config COMPLETA (inclui byBrand) — antes guardava só cpaValue/revPercentage e
+      // o ranking nunca via o override por casa (R2).
+      const configs: Record<string, AffiliateConfig | undefined> = {};
+      cfgSnap.forEach((d) => { configs[d.id] = d.data() as AffiliateConfig; });
       const names: Record<string, string> = {};
-      affSnap.forEach((d) => { const v = d.data() as any; if (v?.name) names[d.id] = String(v.name); });
+      const brandIdByAffiliate: Record<string, string> = {};
+      affSnap.forEach((d) => {
+        const v = d.data() as any;
+        if (v?.name) names[d.id] = String(v.name);
+        // marca do afiliado (mirror: brand = {id,name}) → aplica a taxa byBrand da casa
+        // dele, MESMA atribuição afiliado→casa que o /admin usa (calcNetProfitByHouse).
+        const bid = v?.brand?.id ?? v?.brand_id;
+        if (bid) brandIdByAffiliate[d.id] = String(bid);
+      });
 
-      // Repasse do afiliado = comissão dele (mesma fórmula dos dashboards).
-      const entries = rows
-        .map((r) => {
-          const affiliateId = String(r?.affiliate_id ?? r?.id ?? '').trim();
-          if (!affiliateId) return null;
-          const cfg = configs[affiliateId] || { cpaValue: 0, revPercentage: 0 };
-          const commission = (Number(r?.qualified_cpa) || 0) * cfg.cpaValue + (Number(r?.rvs) || 0) * (cfg.revPercentage / 100);
-          const name = names[affiliateId] || String(r?.name ?? r?.label ?? r?.affiliate_name ?? `Afiliado #${affiliateId}`);
-          return { affiliateId, name, commission: Math.round(commission * 100) / 100 };
-        })
-        .filter((e): e is { affiliateId: string; name: string; commission: number } => !!e && e.commission > 0)
-        .sort((a, b) => b.commission - a.commission)
-        .slice(0, 100)
-        .map((e, i) => ({ pos: i + 1, ...e }));
+      // Mesma fórmula/repasse dos dashboards (calcAffiliatePayout), com a taxa por casa.
+      const entries = computeRankingEntries(rows, configs, {
+        brandIdOf: (id) => brandIdByAffiliate[id],
+        nameById: names,
+      });
 
       const adminSnap = await adminDb.collection('users').doc((req as any).user.uid).get();
       const generatedByName = (adminSnap.exists ? (adminSnap.data() as any)?.name : null) || 'Gerência Boost';

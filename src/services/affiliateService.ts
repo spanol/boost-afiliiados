@@ -18,6 +18,19 @@ import {
   StoredManualRow, Metrics, METRIC_KEYS,
   aggregateByHouse, aggregateByDate, aggregateByAffiliate,
 } from '../lib/houseResults';
+// Núcleo PURO de comissão (movido p/ lib/commission p/ o server.ts reusar a MESMA
+// fórmula). Re-exportado abaixo p/ os call-sites antigos (`from './affiliateService'`).
+import {
+  num,
+  resolveBrandRates,
+  rateStatus,
+  calcAffiliatePayout,
+  calcNetProfit,
+  type BrandRates,
+  type AffiliateConfig,
+} from '../lib/commission';
+export { resolveBrandRates, rateStatus, calcAffiliatePayout, calcNetProfit };
+export type { BrandRates, AffiliateConfig };
 
 interface Affiliate {
   id: string;
@@ -29,62 +42,6 @@ interface Affiliate {
     name: string;
   };
   createdAt: string;
-}
-
-// B6 · comissão por casa. Par de taxas (CPA em R$, REV em %) — o mesmo shape do
-// nível de topo da config, mas por marca.
-export interface BrandRates {
-  cpaValue: number;
-  revPercentage: number;
-}
-
-export interface AffiliateConfig {
-  affiliateId: string;
-  // Taxas de TOPO = o default do afiliado (casa única / fallback). Retrocompat
-  // total: configs antigas só têm estes campos e seguem funcionando.
-  cpaValue: number;
-  revPercentage: number;
-  // B6 · override de comissão POR CASA (afiliado × casa). Chaveado por brandId.
-  // Quando uma casa não tem override aqui, usa o CPA/REV de topo. Dev-gated na UI:
-  // o editor por casa só aparece quando há ≥2 casas (hoje, com a mock multi-casa).
-  byBrand?: Record<string, BrandRates>;
-  updatedAt?: any;
-}
-
-// Resolve as taxas efetivas de um afiliado para uma casa: usa o override de
-// `byBrand[brandId]` quando existe, senão cai no CPA/REV de topo (o default).
-// Sem `brandId` (ou sem `byBrand`) devolve o default — é o caminho retrocompat
-// usado por todos os call-sites antigos que não conhecem casa.
-export function resolveBrandRates(config?: AffiliateConfig | null, brandId?: string): BrandRates {
-  const fallback: BrandRates = {
-    cpaValue: Number(config?.cpaValue) || 0,
-    revPercentage: Number(config?.revPercentage) || 0,
-  };
-  if (!brandId || !config?.byBrand) return fallback;
-  const o = config.byBrand[brandId];
-  if (!o) return fallback;
-  return {
-    cpaValue: Number.isFinite(Number(o.cpaValue)) ? Number(o.cpaValue) : fallback.cpaValue,
-    revPercentage: Number.isFinite(Number(o.revPercentage)) ? Number(o.revPercentage) : fallback.revPercentage,
-  };
-}
-
-// Distingue "configurado como 0" de "ainda não configurado": um 0 cru é uma taxa
-// real; a AUSÊNCIA (sem cpaValue de topo e sem override por casa) NÃO deve virar
-// "R$0/CPA" enganoso no display. `brandId` informado → considera o override da casa
-// OU o topo; sem `brandId` (visão "Todas as casas") → só o topo. Fonte ÚNICA da
-// regra a0dc467, consumida por AffiliateDetails e ClientDashboard (antes a heurística
-// vivia inline só na AffiliateDetails e nunca chegou na view do próprio afiliado).
-export function rateStatus(
-  config?: AffiliateConfig | null,
-  brandId?: string
-): { cpaConfigured: boolean; revConfigured: boolean } {
-  const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
-  const override = brandId && config?.byBrand ? config.byBrand[brandId] : undefined;
-  return {
-    cpaConfigured: isNum(override?.cpaValue) || isNum(config?.cpaValue),
-    revConfigured: isNum(override?.revPercentage) || isNum(config?.revPercentage),
-  };
 }
 
 export interface AffiliateStatusConfig {
@@ -647,7 +604,7 @@ export interface CampaignRow {
   deposit: number;
 }
 
-const num = (v: any): number => (Number.isFinite(Number(v)) ? Number(v) : 0);
+// `num` agora vem de lib/commission (importado no topo) — fonte única, sem NaN.
 
 // Agrega linhas cruas de results?groupBy=campaign por campanha, somando as métricas.
 // Defensivo porque (a) a API externa varia os nomes de campo e (b) a chamada da rede
@@ -722,26 +679,8 @@ export async function fetchAllResultsByCampaign(opts: DateRangeOpts = {}, affili
 // Pendente (só apresentação, não a fórmula): exibir também POR CASA e POR PERÍODO
 // além do consolidado atual.
 
-// Repasse devido ao afiliado para um result (mesmo cálculo exibido nos dashboards):
-// CPA qualificado × valor de CPA + REV × (percentual / 100).
-// B6 · `brandId` opcional: quando informado, usa a taxa POR CASA do afiliado
-// (override de `byBrand`, com fallback no default). Sem ele, usa o default —
-// caminho retrocompat de todo call-site que não conhece casa (groupBy=affiliate).
-export function calcAffiliatePayout(result: any, config?: AffiliateConfig | null, brandId?: string): number {
-  const { cpaValue, revPercentage } = resolveBrandRates(config, brandId);
-  // num() coage métrica não-finita (string não-numérica da API externa, null) p/ 0
-  // ANTES de multiplicar — `|| 0` deixava passar strings tipo '2,5' e propagava NaN
-  // pra todo total agregado de dinheiro.
-  const cpa = num(result?.qualified_cpa) * cpaValue;
-  const rev = num(result?.rvs) * (revPercentage / 100);
-  return cpa + rev;
-}
-
-// Lucro líquido da agência para um result: comissão da casa − repasse ao afiliado.
-export function calcNetProfit(result: any, config?: AffiliateConfig | null, brandId?: string): number {
-  const houseCommission = num(result?.total_commission);
-  return houseCommission - calcAffiliatePayout(result, config, brandId);
-}
+// calcAffiliatePayout e calcNetProfit agora vivem em lib/commission (importados +
+// re-exportados no topo) — fonte única compartilhada client+server.
 
 // Mapa subId → config do ESPECIAL-pai. Regra de negócio (Carlos, 2026-06-04): a
 // agência paga o especial pela taxa DELE sobre toda a rede; quem repassa os subs
