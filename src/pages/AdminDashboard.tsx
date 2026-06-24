@@ -203,14 +203,36 @@ export default function AdminDashboard() {
     () => buildSubToSpecialConfig(specials, configs, { activeOnly: true }),
     [specials, configs]
   );
+
+  // Resolve a casa de um afiliado (id → { nome canônico, brandId real }). É a
+  // ponte compartilhada pelo LUCRO AGREGADO (card de cima) e pelo detalhamento
+  // por casa, p/ os DOIS aplicarem a MESMA taxa por casa (byBrand). Sem isso o
+  // card "lucro da agência" usava a taxa de topo e divergia da Σ dos cards quando
+  // havia override por casa (ex.: especial com topo R$300 e SportingBet R$200). [[B6]]
+  const houseOf = useMemo(() => {
+    const brandIdByName: Record<string, string> = {};
+    for (const r of Array.isArray(brandRows) ? brandRows : []) {
+      const id = String(r.id ?? '');
+      const raw = String(r.label || r.name || r.id || 'Casa');
+      const name = getKnownBrandName(id, raw) ?? humanizeName(raw);
+      if (name && id) brandIdByName[name] = id;
+    }
+    return (affiliateId: string) => {
+      const rawBrand = brandById[String(affiliateId)];
+      if (!rawBrand) return null;
+      const key = getKnownBrandName(rawBrand) ?? humanizeName(rawBrand);
+      return { key, brandId: brandIdByName[key] };
+    };
+  }, [brandRows, brandById]);
+
   // Contribuição das casas manuais ao lucro: Σ (comissão da casa − repasse atribuído).
   const manualNet = useMemo(() => {
     const np = calcManualHouseNetProfit(manualScoped, configs, subToSpecialConfig);
     return Object.values(np).reduce((s, h) => s + h.netProfit, 0);
   }, [manualScoped, configs, subToSpecialConfig]);
   const netProfit = useMemo(
-    () => calcAgencyNetProfit(scopedResults, configs, subToSpecialConfig).netProfit + manualNet,
-    [scopedResults, configs, subToSpecialConfig, manualNet]
+    () => calcAgencyNetProfit(scopedResults, configs, subToSpecialConfig, houseOf).netProfit + manualNet,
+    [scopedResults, configs, subToSpecialConfig, manualNet, houseOf]
   );
 
   // Por casa (agência) — comissão da casa + funil por marca (groupBy=brand) +
@@ -236,23 +258,10 @@ export default function AdminDashboard() {
       };
     });
 
-    // Ponte nome canônico da casa → brandId real (chave do byBrand). Usa as mesmas
-    // linhas de marca, garantindo que o brandId passado ao repasse é o do byBrand.
-    const brandIdByName: Record<string, string> = {};
-    for (const h of base) if (h.name && h.id) brandIdByName[h.name] = h.id;
-
-    // Resolve a casa de um afiliado pelo mapa id→marca, canonizando o nome igual
-    // aos cards e anexando o brandId real para o override por casa.
-    const houseOf = (affiliateId: string) => {
-      const rawBrand = brandById[String(affiliateId)];
-      if (!rawBrand) return null;
-      const key = getKnownBrandName(rawBrand) ?? humanizeName(rawBrand);
-      return { key, brandId: brandIdByName[key] };
-    };
-
-    // OTG: cruza afiliado×casa (results). Manual: lucro direto das house_results
-    // (disjunto das casas OTG, chaveado pelo mesmo nome canônico). Sem o manual, as
-    // casas manuais apareceriam com repasse/lucro 0 mesmo tendo afiliados atribuídos.
+    // OTG: cruza afiliado×casa (results) com o MESMO `houseOf` do lucro agregado,
+    // p/ os dois aplicarem a taxa por casa (byBrand) e baterem. Manual: lucro
+    // direto das house_results (disjunto das casas OTG, chaveado pelo nome canônico).
+    // Sem o manual, casas manuais apareceriam com repasse/lucro 0 mesmo com afiliados.
     const np = {
       ...calcNetProfitByHouse(results, houseOf, configs, subToSpecialConfig),
       ...calcManualHouseNetProfit(manualRows, configs, subToSpecialConfig),
@@ -264,7 +273,7 @@ export default function AdminDashboard() {
         return { ...h, payout: profit?.payout ?? 0, netProfit: profit?.netProfit ?? 0 };
       })
       .sort((a, b) => b.commission - a.commission);
-  }, [brandRows, results, brandById, configs, subToSpecialConfig, manualRows]);
+  }, [brandRows, results, houseOf, configs, subToSpecialConfig, manualRows]);
 
   // Contagem de afiliados respeita o filtro de marca.
   const affiliatesCount = useMemo(

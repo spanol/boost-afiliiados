@@ -720,17 +720,24 @@ export function buildSubToSpecialConfig(
 // afiliado). Repasse usa a config do afiliado, EXCETO quando ele é sub de um
 // especial — aí usa a config do especial-pai (subToSpecialConfig). Cada afiliado
 // entra uma vez (sem double-count).
+// `houseOf` (opcional): resolve a casa de cada afiliado p/ aplicar a taxa POR
+// CASA (byBrand) — a MESMA que `calcNetProfitByHouse` usa. Sem ele (ou quando a
+// casa é desconhecida) cai na taxa padrão/topo: retrocompat e nunca derruba o
+// afiliado. COM ele, este agregado bate EXATAMENTE com a Σ dos cards por casa —
+// antes divergia quando algum afiliado tinha override byBrand ≠ topo (ex.: um
+// especial com taxa de topo alta e taxa por casa menor). [[boost-net-profit-per-house]]
 export function calcAgencyNetProfit(
   results: any[],
   configs: Record<string, AffiliateConfig | undefined>,
-  subToSpecialConfig: Record<string, AffiliateConfig> = {}
+  subToSpecialConfig: Record<string, AffiliateConfig> = {},
+  houseOf?: (affiliateId: string) => { key: string; brandId?: string } | null
 ): { commission: number; payout: number; netProfit: number } {
   let commission = 0;
   let payout = 0;
   for (const r of Array.isArray(results) ? results : []) {
     const id = String(r?.affiliate_id ?? r?.id ?? '');
     commission += r?.total_commission || 0;
-    payout += calcAffiliatePayout(r, subToSpecialConfig[id] || configs[id]);
+    payout += calcAffiliatePayout(r, subToSpecialConfig[id] || configs[id], houseOf?.(id)?.brandId);
   }
   return { commission, payout, netProfit: commission - payout };
 }
@@ -743,8 +750,10 @@ export function calcAgencyNetProfit(
 // (taxa do afiliado × métricas dele NAQUELA casa), com:
 //   - a taxa POR CASA do afiliado quando há override (`byBrand` via `house.brandId`); e
 //   - a regra do especial-pai p/ subs (subToSpecialConfig), igual ao lucro agregado.
-// Invariante: sem overrides por casa, Σ das casas == calcAgencyNetProfit (mesma base,
-// só particionada). [[boost-net-profit-per-house]] [[boost-net-profit-rule]]
+// Invariante: Σ das casas == calcAgencyNetProfit QUANDO o agregado recebe o mesmo
+// `houseOf` (ambos aplicam byBrand). Sem passar `houseOf` ao agregado, ele usa a
+// taxa de topo e os dois divergem se houver override por casa — era a causa do
+// card "lucro da agência" não bater com a Σ dos cards. [[boost-net-profit-per-house]] [[boost-net-profit-rule]]
 export interface HouseNetProfit {
   commission: number;
   payout: number;

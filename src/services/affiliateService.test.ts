@@ -286,6 +286,39 @@ describe('calcAgencyNetProfit', () => {
     expect(calcAgencyNetProfit([], configs, {})).toEqual({ commission: 0, payout: 0, netProfit: 0 });
     expect(calcAgencyNetProfit(null as any, configs, {}).netProfit).toBe(0);
   });
+
+  it('com houseOf, aplica a taxa POR CASA (byBrand) e bate com a Σ das casas', () => {
+    // Replica o caso real: afiliado na SportingBet com topo R$300/CPA mas byBrand
+    // SportingBet R$200/CPA (especial superfaturado no topo). Sem houseOf o card de
+    // cima usa R$300 (lucro negativo); com houseOf usa R$200 e bate com os cards.
+    const res = [{ id: 'y', total_commission: 1000, qualified_cpa: 5, rvs: 0 }];
+    const cfgs = {
+      y: { affiliateId: 'y', cpaValue: 300, revPercentage: 0, byBrand: { sb: { cpaValue: 200, revPercentage: 0 } } },
+    } as any;
+    const houseOf = (id: string) => (id === 'y' ? { key: 'SportingBet', brandId: 'sb' } : null);
+
+    // Sem houseOf: taxa de topo (R$300) → repasse 5×300 = 1500 (lucro −500).
+    expect(calcAgencyNetProfit(res, cfgs).payout).toBe(1500);
+    expect(calcAgencyNetProfit(res, cfgs).netProfit).toBe(1000 - 1500);
+
+    // Com houseOf: taxa por casa (R$200) → repasse 5×200 = 1000 (lucro 0)...
+    const withHouse = calcAgencyNetProfit(res, cfgs, {}, houseOf);
+    expect(withHouse.payout).toBe(1000);
+    expect(withHouse.netProfit).toBe(0);
+
+    // ...e isso bate EXATAMENTE com a Σ dos cards por casa.
+    const byHouse = calcNetProfitByHouse(res, houseOf, cfgs);
+    const sumNet = Object.values(byHouse).reduce((s, h) => s + h.netProfit, 0);
+    expect(withHouse.netProfit).toBe(sumNet);
+  });
+
+  it('com houseOf, casa desconhecida cai na taxa de topo (não derruba o afiliado)', () => {
+    const res = [{ id: 'z', total_commission: 100, qualified_cpa: 1, rvs: 0 }];
+    const cfgs = { z: { affiliateId: 'z', cpaValue: 50, revPercentage: 0 } } as any;
+    const r = calcAgencyNetProfit(res, cfgs, {}, () => null); // ninguém tem casa conhecida
+    expect(r.payout).toBe(50);     // taxa de topo, afiliado contabilizado (≠ calcNetProfitByHouse, que o ignora)
+    expect(r.netProfit).toBe(50);
+  });
 });
 
 describe('calcNetProfitByHouse (B1 · lucro por casa, cruzando afiliado×casa)', () => {
