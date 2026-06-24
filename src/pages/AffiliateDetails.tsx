@@ -39,6 +39,7 @@ import {
   fetchAffiliateConfigs,
   calcAffiliatePayout,
   resolveBrandRates,
+  rateStatus,
   AffiliateConfig,
   CampaignRow,
   createUser,
@@ -609,18 +610,12 @@ export default function AffiliateDetails() {
               const rates = isAllBrands
                 ? { cpaValue: config?.cpaValue || 0, revPercentage: config?.revPercentage || 0 }
                 : resolveBrandRates(config, String(selectedBrandRow?.id ?? ''));
-              // "Configurado como 0" ≠ "ainda não configurado": detecta a AUSÊNCIA do
-              // valor de CPA (config sem `cpaValue` de topo e sem override por casa) p/
-              // não exibir R$0 como se fosse uma taxa real. Caso clássico: afiliado com
-              // só `byBrand` (override por casa) e sem default de topo → a visão "Todas
-              // as casas" cai no topo ausente. A configuração é do admin master.
-              const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
-              const brandCpaRaw = isAllBrands
-                ? undefined
-                : config?.byBrand?.[String(selectedBrandRow?.id ?? '')]?.cpaValue;
-              const cpaConfigured = isAllBrands
-                ? isNum(config?.cpaValue)
-                : (isNum(brandCpaRaw) || isNum(config?.cpaValue));
+              // "Configurado como 0" ≠ "ainda não configurado": rateStatus detecta a
+              // AUSÊNCIA do valor de CPA (config sem `cpaValue` de topo e sem override
+              // por casa) p/ não exibir R$0 como se fosse uma taxa real. Caso clássico:
+              // afiliado só com `byBrand` e sem default de topo → "Todas as casas" cai no
+              // topo ausente. Fonte única compartilhada com o ClientDashboard.
+              const { cpaConfigured } = rateStatus(config, isAllBrands ? undefined : String(selectedBrandRow?.id ?? ''));
               const calculatedCpa = (row.qualified_cpa || 0) * rates.cpaValue;
               const calculatedRev = (row.rvs || 0) * (rates.revPercentage / 100);
               const totalCommission = calculatedCpa + calculatedRev;

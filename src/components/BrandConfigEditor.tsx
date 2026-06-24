@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Store, Save, Loader2, Check, Tag } from 'lucide-react';
 import {
+  buildBrandConfigTopPayload,
   resolveBrandRates,
   saveAffiliateBrandRates,
   saveAffiliateConfig,
@@ -92,13 +93,8 @@ export default function BrandConfigEditor({ affiliateId, brandRows, config, onSa
     setSaving(true);
     setError(null);
     try {
-      // Topo: grava o padrão do contrato (vazio = mantém o salvo, não zera).
-      const baseRates = {
-        cpaValue: base.cpa.trim() !== '' ? Number(base.cpa) || 0 : (Number(config?.cpaValue) || 0),
-        revPercentage: base.rev.trim() !== '' ? Number(base.rev) || 0 : (Number(config?.revPercentage) || 0),
-      };
       // byBrand: só casas com ALGUM override preenchido; preenchimento parcial
-      // herda o padrão (o que está sendo salvo agora). Casa vazia = herda o topo.
+      // herda o padrão "ao vivo" (digitado, ou salvo) — mesmo valor que o placeholder.
       const byBrand: Record<string, BrandRates> = {};
       for (const h of houses) {
         const v = rates[h.id] || { cpa: '', rev: '' };
@@ -106,20 +102,18 @@ export default function BrandConfigEditor({ affiliateId, brandRows, config, onSa
         const hasRev = v.rev.trim() !== '';
         if (!hasCpa && !hasRev) continue;
         byBrand[h.id] = {
-          cpaValue: hasCpa ? Number(v.cpa) || 0 : baseRates.cpaValue,
-          revPercentage: hasRev ? Number(v.rev) || 0 : baseRates.revPercentage,
+          cpaValue: hasCpa ? Number(v.cpa) || 0 : liveDef.cpaValue,
+          revPercentage: hasRev ? Number(v.rev) || 0 : liveDef.revPercentage,
         };
       }
       // Mesmo doc (merge): o topo é o que a manchete de lucro e a view "Todas as
-      // casas" leem; o byBrand é o override por casa. Gravar os dois aqui faz a
-      // tela do afiliado ficar consistente com a Gestão de Afiliados.
-      // Só grava o topo se o admin preencheu o Padrão OU já existia um topo — assim
-      // editar SÓ um override por casa não cria um topo 0/0 "fantasma" num afiliado
-      // que nunca teve taxa de contrato (preserva o selo "CPA não configurado").
-      const baseTouched = base.cpa.trim() !== '' || base.rev.trim() !== '';
-      const hadTopLevel = config?.cpaValue != null || config?.revPercentage != null;
-      if (baseTouched || hadTopLevel) {
-        await saveAffiliateConfig({ affiliateId, cpaValue: baseRates.cpaValue, revPercentage: baseRates.revPercentage });
+      // casas" leem; o byBrand é o override por casa. O payload de topo grava SÓ os
+      // campos realmente configurados (digitado agora OU já existente como número) —
+      // assim editar só o REV, ou só um override por casa, NÃO cria um `cpaValue: 0`
+      // fantasma num afiliado sem taxa de contrato (preserva "CPA não configurado").
+      const topPayload = buildBrandConfigTopPayload(base, config);
+      if (topPayload) {
+        await saveAffiliateConfig({ affiliateId, ...topPayload });
       }
       await saveAffiliateBrandRates(affiliateId, byBrand);
       setSaved(true);

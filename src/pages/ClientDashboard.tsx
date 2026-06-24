@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import {
+  AlertCircle,
   Building,
   Clock,
   Loader2,
@@ -18,6 +19,7 @@ import {
   fetchAffiliateResultsByBrand,
   fetchAffiliateDailyResults,
   fetchAffiliates,
+  rateStatus,
   resolveBrandRates,
 } from '../services/affiliateService';
 import BrandBreakdown from '../components/BrandBreakdown';
@@ -223,6 +225,13 @@ export default function ClientDashboard() {
             const calculatedCpa = (row.qualified_cpa || 0) * rates.cpaValue;
             const calculatedRev = (row.rvs || 0) * (rates.revPercentage / 100);
             const totalCommission = calculatedCpa + calculatedRev;
+            // "Configurado como 0" ≠ "ainda não configurado": mesma regra (rateStatus)
+            // da tela do admin — antes esta view do próprio afiliado mostrava R$0 como
+            // taxa real e o selo "Configurado" fixo, mesmo sem taxa definida.
+            const { cpaConfigured, revConfigured } = rateStatus(
+              config,
+              isAllBrands ? undefined : String(selectedBrandRow?.id ?? '')
+            );
 
             return (
               <div key={idx} className="space-y-8">
@@ -235,9 +244,15 @@ export default function ClientDashboard() {
                       <h2 className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white break-words">
                         R$ {totalCommission.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </h2>
-                      <div className="flex items-center gap-1 text-brand dark:text-white font-bold text-sm bg-brand/5 dark:bg-white/10 px-2 py-0.5 rounded-lg">
-                        <TrendingUp size={16} /> Configurado
-                      </div>
+                      {cpaConfigured ? (
+                        <div className="flex items-center gap-1 text-brand dark:text-white font-bold text-sm bg-brand/5 dark:bg-white/10 px-2 py-0.5 rounded-lg">
+                          <TrendingUp size={16} /> Configurado
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1 text-amber-700 dark:text-amber-400 font-bold text-sm bg-amber-500/10 px-2 py-0.5 rounded-lg" title="O valor de CPA do seu contrato ainda não foi configurado. Fale com a gerência.">
+                          <AlertCircle size={16} /> CPA não configurado
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -249,11 +264,15 @@ export default function ClientDashboard() {
                         </div>
                         <div>
                           <div className="flex items-center gap-1 text-[10px] font-bold text-slate-500 dark:text-neutral-300 uppercase tracking-widest mb-1">
-                            CPA Calculado (R$ {rates.cpaValue}/CPA) <InfoTooltip text="CPA Qualificado × valor de CPA do seu contrato. Quantos cadastros qualificaram, multiplicado pelo valor por aquisição." size={10} align="left" />
+                            CPA Calculado{cpaConfigured ? ` (R$ ${rates.cpaValue}/CPA)` : ''} <InfoTooltip text="CPA Qualificado × valor de CPA do seu contrato. Quantos cadastros qualificaram, multiplicado pelo valor por aquisição." size={10} align="left" />
                           </div>
-                          <p className="text-xl font-black text-slate-800 dark:text-white">
-                            R$ {calculatedCpa.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </p>
+                          {cpaConfigured ? (
+                            <p className="text-xl font-black text-slate-800 dark:text-white">
+                              R$ {calculatedCpa.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </p>
+                          ) : (
+                            <p className="text-sm font-bold text-amber-600 dark:text-amber-400">Não configurado</p>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -265,11 +284,15 @@ export default function ClientDashboard() {
                         </div>
                         <div>
                           <div className="flex items-center gap-1 text-[10px] font-bold text-slate-500 dark:text-neutral-300 uppercase tracking-widest mb-1">
-                            REV Share ({rates.revPercentage}%) <InfoTooltip text="Participação na receita: percentual do seu contrato aplicado sobre o RVS (receita compartilhada) do período." size={10} align="left" />
+                            REV Share{revConfigured ? ` (${rates.revPercentage}%)` : ''} <InfoTooltip text="Participação na receita: percentual do seu contrato aplicado sobre o RVS (receita compartilhada) do período." size={10} align="left" />
                           </div>
-                          <p className="text-xl font-black text-slate-800 dark:text-white">
-                            R$ {calculatedRev.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </p>
+                          {revConfigured ? (
+                            <p className="text-xl font-black text-slate-800 dark:text-white">
+                              R$ {calculatedRev.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </p>
+                          ) : (
+                            <p className="text-sm font-bold text-amber-600 dark:text-amber-400">Não configurado</p>
+                          )}
                         </div>
                       </div>
                     </div>
