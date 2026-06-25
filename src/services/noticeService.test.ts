@@ -4,6 +4,7 @@ import { authFetch } from '../lib/api';
 import {
   isNoticeForUser,
   subscribeToNotices,
+  countUnreadNotices,
   createNotice,
   updateNotice,
   deleteNotice,
@@ -136,5 +137,35 @@ describe('createNotice / updateNotice / deleteNotice (authFetch)', () => {
       json: async () => { throw new Error('not json'); },
     } as any);
     await expect(deleteNotice('n1')).rejects.toThrow('Falha ao remover aviso.');
+  });
+});
+
+// =============================================================================
+// countUnreadNotices — badge do sino: createdAt vs último "visto" (R27, pura)
+// =============================================================================
+describe('countUnreadNotices (R27)', () => {
+  // Fixture: createdAt é { toMillis: () => N } (Timestamp resolvido) ou null
+  // (serverTimestamp ainda pendente — write não resolveu no servidor).
+  const at = (millis: number) => ({ createdAt: { toMillis: () => millis } } as any);
+  const pending = () => ({ createdAt: null } as any);
+
+  it('createdAt mais novo que o lastSeen → conta como não-lido', () => {
+    expect(countUnreadNotices([at(200)], 100)).toBe(1);
+  });
+
+  it('createdAt NULL (serverTimestamp pendente) → conta como NÃO-LIDO (fix R27)', () => {
+    expect(countUnreadNotices([pending()], 100)).toBe(1);
+  });
+
+  it('createdAt mais antigo que o lastSeen → NÃO conta (já lido)', () => {
+    expect(countUnreadNotices([at(50)], 100)).toBe(0);
+  });
+
+  it('mistura de 3 (novo + pendente + antigo) → contagem correta (2 não-lidos)', () => {
+    expect(countUnreadNotices([at(200), pending(), at(50)], 100)).toBe(2);
+  });
+
+  it('lista vazia → 0', () => {
+    expect(countUnreadNotices([], 100)).toBe(0);
   });
 });

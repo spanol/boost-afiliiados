@@ -5,6 +5,7 @@ import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { updatePassword } from 'firebase/auth';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { db, storage } from '../lib/firebase';
+import { validateProfile, saveProfile } from '../lib/profileSave';
 import { 
   User, 
   Mail, 
@@ -87,37 +88,24 @@ export default function Profile() {
     setMessage(null);
 
     try {
-      const forcePasswordChange = profile?.mustChangePassword;
-      if (forcePasswordChange && !newPassword) {
-        setMessage({ type: 'error', text: 'Você precisa definir uma nova senha antes de continuar.' });
-        return;
-      }
-      if (newPassword && newPassword.length < 6) {
-        setMessage({ type: 'error', text: 'A nova senha deve ter ao menos 6 caracteres.' });
-        return;
-      }
-      if (!name.trim()) {
-        setMessage({ type: 'error', text: 'Informe seu nome.' });
-        return;
+      const forcePasswordChange = !!profile?.mustChangePassword;
+      const validationError = validateProfile({ name, avatarUrl, newPassword, forcePasswordChange });
+      if (validationError) {
+        setMessage({ type: 'error', text: validationError });
+        return; // o finally faz setLoading(false)
       }
 
-      const updatePayload: Record<string, any> = {
-        name: name.trim(),
-        avatarUrl,
-        updatedAt: serverTimestamp()
-      };
-      if (forcePasswordChange && newPassword) {
-        updatePayload.mustChangePassword = false;
-      }
-
-      // 1) Dados do perfil (Firestore). Se falhar, NÃO seguimos para a senha.
-      await updateDoc(doc(db, 'users', user.uid), updatePayload);
-
-      // 2) Senha (Firebase Auth) — só quando informada.
-      if (newPassword) {
-        await updatePassword(user, newPassword);
-        setNewPassword('');
-      }
+      // Ordem SEGURA (R23): a senha troca PRIMEIRO; o perfil (com mustChangePassword:false)
+      // só é gravado DEPOIS — se updatePassword falhar, o gate de primeiro acesso permanece.
+      await saveProfile(
+        { name, avatarUrl, newPassword, forcePasswordChange },
+        {
+          changePassword: (pw) => updatePassword(user, pw),
+          updateProfileDoc: (payload) => updateDoc(doc(db, 'users', user.uid), payload),
+          timestamp: () => serverTimestamp(),
+        },
+      );
+      if (newPassword) setNewPassword('');
 
       setMessage({ type: 'success', text: 'Perfil atualizado com sucesso!' });
     } catch (err: any) {

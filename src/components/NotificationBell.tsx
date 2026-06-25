@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Bell } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { cn } from '../lib/utils';
-import { Notice, subscribeToNotices, isNoticeForUser } from '../services/noticeService';
+import { Notice, subscribeToNotices, isNoticeForUser, countUnreadNotices } from '../services/noticeService';
 
 // Sino do header: mostra os avisos relevantes ao usuário + um badge de não-lidos.
 // "Não-lido" é derivado de um marcador local (localStorage) por uid — MVP sem
@@ -37,10 +37,7 @@ export default function NotificationBell() {
     return notices.filter((n) => (isAdmin ? n.active : isNoticeForUser(n, profile)));
   }, [notices, profile]);
 
-  const unread = useMemo(
-    () => visible.filter((n) => (n.createdAt?.toMillis() ?? 0) > lastSeen).length,
-    [visible, lastSeen],
-  );
+  const unread = useMemo(() => countUnreadNotices(visible, lastSeen), [visible, lastSeen]);
 
   const markSeen = () => {
     const now = Date.now();

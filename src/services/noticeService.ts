@@ -81,6 +81,21 @@ export function isNoticeForUser(
   return false;
 }
 
+// Conta avisos não-lidos (badge do sino) comparando createdAt com o último "visto"
+// (ms). R27: um aviso com serverTimestamp PENDENTE chega com createdAt null (o write
+// ainda não resolveu no servidor); antes `(createdAt?.toMillis() ?? 0)` virava 0 e
+// `0 > lastSeen` era falso → o aviso recém-criado nascia "lido". Aqui, createdAt null =
+// recém-criado = NÃO lido (conta como não-lido até o timestamp resolver).
+export function countUnreadNotices(
+  notices: Pick<Notice, 'createdAt'>[],
+  lastSeenMillis: number,
+): number {
+  return notices.filter((n) => {
+    const ts = n.createdAt?.toMillis();
+    return ts == null ? true : ts > lastSeenMillis;
+  }).length;
+}
+
 async function readError(res: Response, fallback: string): Promise<never> {
   let message = fallback;
   try {

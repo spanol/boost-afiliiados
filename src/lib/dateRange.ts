@@ -24,6 +24,25 @@ export function toISODate(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+// Valida o ?date do /ranking: o regex /^\d{4}-\d{2}-\d{2}$/ só checava o FORMATO, então
+// uma data impossível (ex.: 2026-13-40 ou 2026-02-30) passava e o servidor montava o
+// ranking de um dia inexistente. Aqui validamos a SEMÂNTICA: mês 1-12, dia 1-31 e um
+// round-trip por Date UTC (que normaliza fora-de-faixa) — se não bater, cai no fallback.
+export function resolveRankingDate(param: string | null | undefined, fallback: string): string {
+  if (!param) return fallback;
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(param);
+  if (!match) return fallback;
+  const y = Number(match[1]);
+  const m = Number(match[2]);
+  const d = Number(match[3]);
+  if (m < 1 || m > 12 || d < 1 || d > 31) return fallback;
+  const dt = new Date(`${match[1]}-${match[2]}-${match[3]}T00:00:00Z`);
+  if (dt.getUTCFullYear() !== y || dt.getUTCMonth() + 1 !== m || dt.getUTCDate() !== d) {
+    return fallback;
+  }
+  return param;
+}
+
 // Calcula o intervalo de um preset. 'custom' não tem intervalo próprio
 // (o usuário define manualmente), então retorna o mês atual como base.
 export function getPresetRange(preset: DateRangePresetId, now: Date = new Date()): DateRange {

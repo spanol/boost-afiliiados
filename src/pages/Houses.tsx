@@ -14,8 +14,9 @@ import {
 import { fetchAffiliates } from '../services/affiliateService';
 import {
   parseResultsCsv, parseResultsRows, resolveAffiliates, buildAffiliateLookup,
-  ResolvedRow, ParseResult, METRIC_KEYS, StoredManualRow,
+  ParseResult, StoredManualRow,
 } from '../lib/houseResults';
+import { canImport, buildImportPayload } from '../lib/houseImport';
 import { parseSpreadsheetFile, downloadResultsTemplate, isExcelFile } from '../lib/xlsx';
 import { humanizeName } from '../lib/utils';
 
@@ -563,17 +564,13 @@ function HouseResultsModal({ house, onClose }: { house: House; onClose: () => vo
 
   const onTypeText = (v: string) => { clearFile(); setText(v); };
 
-  const canImport = !!analysis && analysis.rows.length > 0 && parseErrors.length === 0 && analysis.unresolved.length === 0;
+  const canImportFile = canImport(analysis, parseErrors);
 
   const handleImport = async () => {
-    if (!analysis || !canImport) return;
+    if (!analysis || !canImportFile) return;
     setImporting(true);
     try {
-      const rows = analysis.rows.map((r: ResolvedRow) => {
-        const out: any = { date: r.date, affiliateId: r.affiliateId };
-        for (const k of METRIC_KEYS) out[k] = r[k];
-        return out;
-      });
+      const rows = buildImportPayload(analysis);
       const res = await importHouseResults(house.slug, rows);
       push({ type: 'success', message: `Importado: ${res.imported} linhas em ${res.dates.length} dia(s).` });
       setText('');
@@ -797,7 +794,7 @@ function HouseResultsModal({ house, onClose }: { house: House; onClose: () => vo
             </button>
             <button
               onClick={handleImport}
-              disabled={!canImport || importing}
+              disabled={!canImportFile || importing}
               className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl bg-amber-500 text-white text-xs font-bold hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
               {importing ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}

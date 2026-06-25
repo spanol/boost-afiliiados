@@ -5,7 +5,7 @@ import { Trophy, Crown, Loader2, RefreshCw, Medal } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../contexts/ToastContext';
 import { cn, humanizeName } from '../lib/utils';
-import { formatRangeLabel } from '../lib/dateRange';
+import { formatRangeLabel, resolveRankingDate } from '../lib/dateRange';
 import {
   DailyRanking,
   RankingEntry,
@@ -30,7 +30,7 @@ export default function Ranking() {
   // Dia exibido: hoje por padrão; admin pode inspecionar/recalcular outro via ?date=YYYY-MM-DD.
   const [searchParams] = useSearchParams();
   const dateParam = searchParams.get('date');
-  const today = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? dateParam : todayISO();
+  const today = resolveRankingDate(dateParam, todayISO());
 
   const [ranking, setRanking] = useState<DailyRanking | null>(null);
   const [loading, setLoading] = useState(true);

@@ -7,6 +7,7 @@ import {
   matchPreset,
   getPreviousRange,
   percentChange,
+  resolveRankingDate,
 } from './dateRange';
 
 // 29/05/2026 (mês index 4). Datas locais — coerente com toISODate (usa fuso local).
@@ -130,5 +131,42 @@ describe('percentChange', () => {
 
   it('retorna 0 quando não houve variação', () => {
     expect(percentChange(50, 50)).toBe(0);
+  });
+});
+
+describe('resolveRankingDate', () => {
+  const FALLBACK = '2026-06-24';
+
+  it('retorna o próprio param quando é uma data válida YYYY-MM-DD', () => {
+    expect(resolveRankingDate('2026-06-24', FALLBACK)).toBe('2026-06-24');
+    expect(resolveRankingDate('2026-01-01', FALLBACK)).toBe('2026-01-01');
+    expect(resolveRankingDate('2026-12-31', FALLBACK)).toBe('2026-12-31');
+  });
+
+  it('cai no fallback quando o param é null/undefined/vazio', () => {
+    expect(resolveRankingDate(null, FALLBACK)).toBe(FALLBACK);
+    expect(resolveRankingDate(undefined, FALLBACK)).toBe(FALLBACK);
+    expect(resolveRankingDate('', FALLBACK)).toBe(FALLBACK);
+  });
+
+  it('cai no fallback quando o formato está errado', () => {
+    expect(resolveRankingDate('2026/06/24', FALLBACK)).toBe(FALLBACK);
+    expect(resolveRankingDate('abc', FALLBACK)).toBe(FALLBACK);
+  });
+
+  it('cai no fallback para mês fora de faixa (mês 13)', () => {
+    expect(resolveRankingDate('2026-13-40', FALLBACK)).toBe(FALLBACK);
+  });
+
+  it('cai no fallback para dia impossível no mês (2026-02-30)', () => {
+    expect(resolveRankingDate('2026-02-30', FALLBACK)).toBe(FALLBACK);
+  });
+
+  it('aceita 29/02 em ano bissexto (2024-02-29)', () => {
+    expect(resolveRankingDate('2024-02-29', FALLBACK)).toBe('2024-02-29');
+  });
+
+  it('cai no fallback para 29/02 em ano não-bissexto (2026-02-29)', () => {
+    expect(resolveRankingDate('2026-02-29', FALLBACK)).toBe(FALLBACK);
   });
 });

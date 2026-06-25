@@ -38,6 +38,11 @@ export default function Register() {
       return;
     }
 
+    // P1.10: normaliza o e-mail UMA vez e usa em TODO lugar (Auth + Firestore). Antes o
+    // Auth recebia o e-mail cru (linha do createUser) e só o Firestore gravava
+    // trim+lowercase → divergência (queries por e-mail e o login podiam não casar).
+    const normalizedEmail = email.trim().toLowerCase();
+
     setLoading(true);
 
     // Explicit path for logging
@@ -46,13 +51,13 @@ export default function Register() {
     try {
       let user;
       try {
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const userCredential = await createUserWithEmailAndPassword(auth, normalizedEmail, password);
         user = userCredential.user;
       } catch (authErr: any) {
         // Se o e-mail já existe, vamos ver se o usuário está logado e tentar criar o perfil
         // Isso ajuda em casos onde o Auth funcionou mas o Firestore falhou anteriormente
         if (authErr.code === 'auth/email-already-in-use') {
-          if (auth.currentUser && auth.currentUser.email === email) {
+          if (auth.currentUser && auth.currentUser.email === normalizedEmail) {
             user = auth.currentUser;
           } else {
             setError('Este e-mail já está cadastrado. Tente fazer login ou use outro.');
@@ -74,7 +79,7 @@ export default function Register() {
         await setDoc(doc(db, 'users', user.uid), {
           uid: user.uid,
           name: name.trim(),
-          email: email.trim().toLowerCase(),
+          email: normalizedEmail,
           phone: phone.trim(),
           socialMedia: socialMedia.trim(),
           cpf: cpf.trim(),
