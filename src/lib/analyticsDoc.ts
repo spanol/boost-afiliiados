@@ -62,3 +62,29 @@ export const resolveFunnelAffiliateId = (
   if (pend) return { affiliateId: pend, funnelOnly: true };
   return { affiliateId: null, funnelOnly: true };
 };
+
+export type FunnelTotals = Record<AnalyticsMetricKey, number> & { matched: number; funnelOnly: boolean };
+
+// Soma o funil (todas as casas) das linhas que pertencem a UM afiliado, casando por
+// affiliateId OU por nameKey (o nameKey cobre o caso só-funil cujo id de rota pode diferir
+// do gravado). `funnelOnly` = todas as linhas casadas são só-funil (não produzem na v2 —
+// caso "Lucas"). Para o card de cliques/cadastros do AffiliateDetails. Puro/testável.
+export const sumFunnelForAffiliate = (
+  rows: Array<{ affiliateId?: string | null; nameKey?: string; funnelOnly?: boolean } & Record<string, any>>,
+  match: { affiliateId?: string | null; nameKey?: string }
+): FunnelTotals => {
+  const wantedId = match.affiliateId != null && match.affiliateId !== '' ? String(match.affiliateId) : null;
+  const wantedKey = match.nameKey ? normalizeNameKey(match.nameKey) : null;
+  const out = { matched: 0, funnelOnly: true } as FunnelTotals;
+  for (const k of ANALYTICS_METRICS) out[k] = 0;
+  for (const r of rows) {
+    const idHit = wantedId != null && r?.affiliateId != null && String(r.affiliateId) === wantedId;
+    const keyHit = wantedKey != null && r?.nameKey != null && normalizeNameKey(r.nameKey) === wantedKey;
+    if (!idHit && !keyHit) continue;
+    out.matched++;
+    if (r.funnelOnly === false) out.funnelOnly = false;
+    for (const k of ANALYTICS_METRICS) out[k] += num(r[k]);
+  }
+  if (out.matched === 0) out.funnelOnly = false;
+  return out;
+};

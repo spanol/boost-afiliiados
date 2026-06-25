@@ -93,6 +93,41 @@ export async function fetchAffiliateConfigs(): Promise<Record<string, AffiliateC
   }
 }
 
+export interface AffiliateFunnel {
+  id: string;
+  nameKey: string;
+  affiliate: string;
+  house: string;
+  affiliateId: string | null;
+  funnelOnly: boolean;
+  clicks: number;
+  registrations: number;
+  ftd: number;
+  cpaQual: number;
+  deposits: number;
+  betAmount: number;
+  ngr: number;
+  range?: { initialDate: string; finalDate: string };
+}
+
+// Funil da v1 analítica (cliques/cadastros/FTD/NGR) escopado por papel pelo servidor
+// (admin = todos; afiliado = próprio + sub-rede). Cliente NUNCA lê affiliate_analytics
+// direto. Ver server.ts GET /api/affiliate-analytics + src/lib/analyticsDoc.
+export async function fetchAffiliateAnalytics(): Promise<AffiliateFunnel[]> {
+  try {
+    const resp = await authFetch('/api/affiliate-analytics', { method: 'GET', headers: { Accept: 'application/json' } });
+    if (!resp.ok) {
+      console.error('Error fetching affiliate analytics:', resp.status);
+      return [];
+    }
+    const body = await resp.json().catch(() => null);
+    return body && Array.isArray(body.analytics) ? (body.analytics as AffiliateFunnel[]) : [];
+  } catch (error) {
+    console.error('Error fetching affiliate analytics:', error);
+    return [];
+  }
+}
+
 // Aceita payload PARCIAL: omitir cpaValue/revPercentage (em vez de mandar 0)
 // preserva a AUSÊNCIA da taxa no merge — é o que impede o "0 fantasma" de topo.
 export async function saveAffiliateConfig(config: Partial<AffiliateConfig> & { affiliateId: string }): Promise<void> {

@@ -523,6 +523,49 @@ export function createApp(deps: ServerDeps) {
     }
   });
 
+  // Funil da v1 analítica (cliques/cadastros/FTD/NGR), escopado por papel como
+  // affiliate-configs: admin vê tudo; afiliado vê só o próprio (+ sub-rede se especial
+  // ativo). Dado sensível mediado pelo servidor — cliente NUNCA lê affiliate_analytics
+  // direto (rule admin-only). [[espelha /api/affiliate-configs]]
+  app.get('/api/affiliate-analytics', requireAuth, async (req, res) => {
+    if (!adminDb) return res.status(500).json({ error: 'Firebase Admin não está inicializado.' });
+    try {
+      const user = (req as any).user;
+      if (user?.role === 'admin') {
+        const snap = await adminDb.collection('affiliate_analytics').get();
+        const analytics: any[] = [];
+        snap.forEach((d) => analytics.push({ id: d.id, ...d.data() }));
+        return res.json({ analytics });
+      }
+
+      const ownId = user?.affiliateId ? String(user.affiliateId) : '';
+      if (!ownId) return res.json({ analytics: [] });
+
+      const ids = new Set<string>([ownId]);
+      try {
+        const specialSnap = await adminDb.collection('special_affiliates').doc(ownId).get();
+        const special = specialSnap.exists ? (specialSnap.data() as any) : null;
+        if (resolveIsSpecial(special) && Array.isArray(special.subAffiliateIds)) {
+          special.subAffiliateIds.forEach((s: any) => ids.add(String(s)));
+        }
+      } catch (e) {
+        console.error('Erro ao carregar sub-rede p/ analytics:', e);
+      }
+
+      const analytics: any[] = [];
+      await Promise.all(
+        [...ids].map(async (id) => {
+          const snap = await adminDb!.collection('affiliate_analytics').where('affiliateId', '==', id).get();
+          snap.forEach((d) => analytics.push({ id: d.id, ...d.data() }));
+        })
+      );
+      return res.json({ analytics });
+    } catch (error: any) {
+      console.error('[affiliate-analytics] get:', error);
+      return res.status(500).json({ error: error.message || 'Erro ao carregar analytics.' });
+    }
+  });
+
   app.patch('/api/affiliates/:affiliateId', requireAdmin, async (req, res) => {
     if (!adminDb) {
       return res.status(500).json({ error: 'Firebase Admin não está inicializado.' });

@@ -27,7 +27,8 @@ import {
   Wallet,
   Eye,
   EyeOff,
-  Users
+  Users,
+  MousePointerClick
 } from 'lucide-react';
 import {
   fetchAffiliateById,
@@ -50,6 +51,8 @@ import {
   fetchSpecialAffiliates,
   fetchRegisteredUsers,
   fetchPaymentProfile,
+  fetchAffiliateAnalytics,
+  AffiliateFunnel,
   PaymentProfile,
   SpecialAffiliate
 } from '../services/affiliateService';
@@ -68,6 +71,8 @@ import { ALL_BRANDS, getKnownBrandName, buildBrandIdOf } from '../lib/brand';
 import { withKnownBrandNames } from '../lib/knownHouses';
 import { canViewAffiliateNetProfit } from '../lib/affiliateView';
 import { cn, humanizeName } from '../lib/utils';
+import { sumFunnelForAffiliate } from '../lib/analyticsDoc';
+import { normalizeNameKey } from '../lib/affiliateName';
 import { motion } from 'motion/react';
 
 // B4 · mascara dados sensíveis (PIX, documento) — só os últimos dígitos.
@@ -144,6 +149,8 @@ export default function AffiliateDetails() {
   // Pool de afiliados (mirror) → afiliado→brandId p/ aplicar a taxa POR CASA (byBrand)
   // no card de lucro do afiliado (R9). Mesma atribuição afiliado→casa do /admin.
   const [affiliatesPool, setAffiliatesPool] = useState<any[]>([]);
+  // Funil da v1 analítica (cliques/cadastros) escopado a este afiliado (+ sub-rede).
+  const [funnelRows, setFunnelRows] = useState<AffiliateFunnel[]>([]);
 
   const openSpecial = async () => {
     if (!affiliate) return;
@@ -238,7 +245,7 @@ export default function AffiliateDetails() {
       const idsCsv = networkIds.join(',');
       setIsNetworkView(isNetwork);
 
-      const [detailsData, resultsData, allConfigs, brandData, campaignData, dailyData, prevResults] = await Promise.all([
+      const [detailsData, resultsData, allConfigs, brandData, campaignData, dailyData, prevResults, funnelData] = await Promise.all([
         fetchAffiliateById(affId),
         (isNetwork ? fetchResultsForAffiliates(networkIds, range) : fetchAffiliateResults(affId, range)).catch(err => {
           console.error('Error fetching results:', err);
@@ -248,8 +255,11 @@ export default function AffiliateDetails() {
         fetchAffiliateResultsByBrand(isNetwork ? idsCsv : affId, range),
         fetchAffiliateResultsByCampaign(isNetwork ? idsCsv : affId, range),
         fetchAffiliateDailyResults(isNetwork ? idsCsv : affId, range.startDate, range.endDate),
-        (isNetwork ? fetchResultsForAffiliates(networkIds, prevRange) : fetchAffiliateResults(affId, prevRange)).catch(() => [])
+        (isNetwork ? fetchResultsForAffiliates(networkIds, prevRange) : fetchAffiliateResults(affId, prevRange)).catch(() => []),
+        // Funil da v1 (cliques/cadastros que a v2 esconde) — não bloqueia se falhar.
+        fetchAffiliateAnalytics().catch(() => [] as AffiliateFunnel[])
       ]);
+      setFunnelRows(Array.isArray(funnelData) ? funnelData : []);
       setAffiliate(detailsData);
       // groupBy=affiliate devolve 1 linha por afiliado; p/ a rede somamos numa linha só
       // (a página renderiza um conjunto de cards por linha de `results`).
@@ -372,11 +382,61 @@ export default function AffiliateDetails() {
     }
   };
 
+  // Funil da v1 (cliques/cadastros que a v2 esconde) deste afiliado: casa por affiliateId
+  // (id de rota) OU por nameKey. Computado ANTES dos returns p/ a degradação graciosa do
+  // caso só-funil (id sintético fora da v2, ex.: "Lucas"). sumFunnelForAffiliate é puro.
+  const funnelTotals = sumFunnelForAffiliate(funnelRows, { affiliateId: id, nameKey: affiliate?.name || affiliate?.label });
+  const funnelDisplayName =
+    humanizeName(
+      funnelRows.find(
+        (r) => (id != null && String(r.affiliateId) === String(id)) || (affiliate != null && normalizeNameKey(r.nameKey || '') === normalizeNameKey(affiliate.name || affiliate.label || ''))
+      )?.affiliate || ''
+    ) || 'Afiliado';
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
         <Loader2 className="w-10 h-10 text-brand dark:text-white animate-spin" />
         <p className="text-slate-500 dark:text-neutral-400 font-medium">Carregando informações realistas...</p>
+      </div>
+    );
+  }
+
+  // Afiliado fora do relatório v2 (só-funil, ex.: "Lucas") — em vez de "Algo deu errado",
+  // mostra o funil que a v1 enxerga (cliques/cadastros · sem comissão ainda).
+  if (!affiliate && !error && funnelTotals.matched > 0) {
+    return (
+      <div className="max-w-2xl mx-auto py-8 space-y-6">
+        <button
+          onClick={() => navigate('/affiliates')}
+          className="flex items-center gap-2 text-sm font-bold text-slate-500 dark:text-neutral-400 hover:text-slate-900 dark:hover:text-white transition-colors"
+        >
+          <ArrowLeft size={18} /> Voltar para lista
+        </button>
+        <div className="bg-white dark:bg-neutral-900 p-8 rounded-3xl border border-slate-100 dark:border-neutral-800 shadow-sm space-y-6">
+          <div>
+            <h1 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight mb-2">{funnelDisplayName}</h1>
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-400 text-[11px] font-bold">
+              <Clock size={12} /> Em captação — sem comissão ainda
+            </div>
+          </div>
+          <p className="text-sm text-slate-500 dark:text-neutral-400 leading-relaxed">
+            Este afiliado já gera <strong>cliques e cadastros</strong>, mas ainda não produziu comissão — por isso não aparece no relatório de resultados. Os números abaixo vêm do funil da OTG.
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {[
+              { label: 'Cliques', value: funnelTotals.clicks },
+              { label: 'Cadastros', value: funnelTotals.registrations },
+              { label: 'FTDs', value: funnelTotals.ftd },
+              { label: 'CPA qual.', value: funnelTotals.cpaQual },
+            ].map((s) => (
+              <div key={s.label} className="p-5 bg-slate-50 dark:bg-neutral-800/50 rounded-2xl border border-slate-100 dark:border-neutral-800">
+                <p className="text-[10px] font-black text-slate-400 dark:text-neutral-400 uppercase tracking-[0.15em]">{s.label}</p>
+                <h4 className="text-3xl font-black text-slate-900 dark:text-white tracking-tighter mt-1">{(s.value || 0).toLocaleString('pt-BR')}</h4>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }
@@ -713,6 +773,34 @@ export default function AffiliateDetails() {
                       <p className="text-[11px] font-bold">
                         Afiliado especial — os números abaixo somam a <strong>rede inteira</strong> (produção própria + sub-afiliados vinculados).
                       </p>
+                    </div>
+                  )}
+
+                  {/* Funil de captação da v1 OTG (cliques/cadastros que a v2 esconde).
+                      Só aparece quando há funil casado p/ este afiliado. O CLIQUE é a
+                      métrica nova (a v2 não tem); o resto contextualiza o topo do funil. */}
+                  {funnelTotals.matched > 0 && (
+                    <div className="bg-white dark:bg-neutral-900 p-6 rounded-3xl border border-slate-100 dark:border-neutral-800 shadow-sm">
+                      <div className="flex items-center gap-2 mb-4">
+                        <MousePointerClick size={15} className="text-brand dark:text-white" />
+                        <p className="text-[10px] font-black text-slate-400 dark:text-neutral-400 uppercase tracking-[0.2em]">Funil de captação · v1 OTG</p>
+                        {funnelTotals.funnelOnly && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-400 text-[9px] font-bold uppercase tracking-wider">sem comissão ainda</span>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                        {[
+                          { label: 'Cliques', value: funnelTotals.clicks },
+                          { label: 'Cadastros', value: funnelTotals.registrations },
+                          { label: 'FTDs', value: funnelTotals.ftd },
+                          { label: 'CPA qual.', value: funnelTotals.cpaQual },
+                        ].map((s) => (
+                          <div key={s.label} className="p-4 bg-slate-50 dark:bg-neutral-800/50 rounded-2xl border border-slate-100 dark:border-neutral-800">
+                            <p className="text-[9px] font-black text-slate-400 dark:text-neutral-400 uppercase tracking-[0.15em]">{s.label}</p>
+                            <h4 className="text-2xl font-black text-slate-900 dark:text-white tracking-tighter mt-0.5">{(s.value || 0).toLocaleString('pt-BR')}</h4>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
 

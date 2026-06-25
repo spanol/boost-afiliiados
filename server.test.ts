@@ -551,3 +551,31 @@ describe('POST /api/analytics/refresh (v1 analítica)', () => {
     expect(pend.funnel.clicks).toBe(20);
   });
 });
+
+// =============================================================================
+// GET /api/affiliate-analytics — leitura do funil escopada por papel
+// =============================================================================
+describe('GET /api/affiliate-analytics (escopo por papel)', () => {
+  const seed = {
+    users: { 'admin-uid': { role: 'admin' }, 'cli-uid': { role: 'client', affiliateId: 'AFF-1' } },
+    affiliate_analytics: {
+      joao__sportingbet: { affiliateId: 'AFF-1', nameKey: 'joao', clicks: 10 },
+      maria__sportingbet: { affiliateId: 'AFF-2', nameKey: 'maria', clicks: 5 },
+    },
+  };
+
+  it('sem token → 401', async () => {
+    await request(buildApp({ seed })).get('/api/affiliate-analytics').expect(401);
+  });
+
+  it('admin vê o funil de todos', async () => {
+    const res = await request(buildApp({ seed })).get('/api/affiliate-analytics').set('Authorization', 'Bearer admin-uid').expect(200);
+    expect(res.body.analytics).toHaveLength(2);
+  });
+
+  it('afiliado vê só o próprio funil (por affiliateId) — não vaza o do outro', async () => {
+    const res = await request(buildApp({ seed })).get('/api/affiliate-analytics').set('Authorization', 'Bearer cli-uid').expect(200);
+    expect(res.body.analytics).toHaveLength(1);
+    expect(res.body.analytics[0].affiliateId).toBe('AFF-1');
+  });
+});
