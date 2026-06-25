@@ -11,6 +11,7 @@ import {
 import { db } from '../lib/firebase';
 import { authFetch } from '../lib/api';
 import { withKnownHouses } from '../lib/knownHouses';
+import { findAffiliateInList } from '../lib/affiliateLookup';
 import { getDefaultRange } from '../lib/dateRange';
 import { getKnownBrands } from '../lib/brand';
 import { fetchHouseResults } from './houseService';
@@ -350,7 +351,7 @@ export async function fetchAffiliateById(id: string): Promise<any> {
 
   try {
     const allAffiliates = await fetchAffiliates();
-    const found = allAffiliates.find((a: any) => String(a.id || a._id) === normalizedId);
+    const found = findAffiliateInList(allAffiliates, normalizedId);
     if (found) return found;
   } catch (error) {
     console.error(`Fallback list lookup failed for affiliate ${normalizedId}:`, error);

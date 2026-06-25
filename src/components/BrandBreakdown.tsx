@@ -1,6 +1,7 @@
 import React from 'react';
 import { Store } from 'lucide-react';
 import { resolveBrandRates, type AffiliateConfig } from '../services/affiliateService';
+import { num } from '../lib/commission';
 import { getKnownBrandName } from '../lib/brand';
 import InfoTooltip from './InfoTooltip';
 import BrandLogo from './BrandLogo';
@@ -24,8 +25,11 @@ export default function BrandBreakdown({ data, config }: BrandBreakdownProps) {
     const raw = String(row.label || row.name || row.id || 'Casa');
     const name = getKnownBrandName(id, raw) ?? raw;
     const { cpaValue, revPercentage } = resolveBrandRates(config, id);
-    const rev = (Number(row.rvs) || 0) * (revPercentage / 100);
-    const cpa = (Number(row.qualified_cpa) || 0) * cpaValue;
+    // num() é a coerção-padrão de métrica dos dashboards (guarda NaN/Infinity → 0):
+    // mantém o BrandBreakdown consistente com calcAffiliatePayout em vez de um
+    // `Number()||0` solto. (num NÃO parseia vírgula pt-BR — a OTG manda número parseável.)
+    const rev = num(row.rvs) * (revPercentage / 100);
+    const cpa = num(row.qualified_cpa) * cpaValue;
     return { id, name, rev, cpa };
   });
 

@@ -66,6 +66,7 @@ import TrendBadge from '../components/TrendBadge';
 import { DateRange, getDefaultRange, getPreviousRange, percentChange } from '../lib/dateRange';
 import { ALL_BRANDS, getKnownBrandName, buildBrandIdOf } from '../lib/brand';
 import { withKnownBrandNames } from '../lib/knownHouses';
+import { canViewAffiliateNetProfit } from '../lib/affiliateView';
 import { cn, humanizeName } from '../lib/utils';
 import { motion } from 'motion/react';
 
@@ -428,7 +429,12 @@ export default function AffiliateDetails() {
   // agência (essa segue só no /admin · [[boost-net-profit-rule]]):
   //   direto = produção própria × taxa dele;
   //   rede   = spread sobre os subs (taxa do especial − taxa do sub), p/ especiais.
-  const isSuperiorView = isAdmin || (!!profile?.isSpecial && String(id) !== String(profile?.affiliateId));
+  const isSuperiorView = canViewAffiliateNetProfit({
+    isAdmin,
+    isSpecial: !!profile?.isSpecial,
+    viewedAffiliateId: String(id),
+    ownAffiliateId: profile?.affiliateId,
+  });
   // Aplica a taxa POR CASA (byBrand) de cada afiliado, igual ao lucro da agência no
   // /admin — antes usava só a taxa de topo e divergia (R9). No-op p/ quem não tem
   // override byBrand. brandIdOf resolve a casa de cada afiliado pelo mirror.

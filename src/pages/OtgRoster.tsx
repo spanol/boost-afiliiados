@@ -10,6 +10,7 @@ import {
 import { useToast } from '../contexts/ToastContext';
 import { cn, humanizeName } from '../lib/utils';
 import { getKnownBrandName } from '../lib/brand';
+import { computeRosterStats } from '../lib/rosterStats';
 
 // Tela INTERNA (admin) p/ consumir o roster de aprovados que puxamos da OTG
 // (coleção pending_affiliates). Diferente do /affiliates (que mostra só os
@@ -86,15 +87,7 @@ export default function OtgRoster() {
     return Array.from(set).sort();
   }, [rows]);
 
-  const stats = useMemo(() => {
-    const byHouse: Record<string, number> = {};
-    let pending = 0, reconciled = 0;
-    for (const r of rows) {
-      if (r.house) byHouse[r.house] = (byHouse[r.house] || 0) + 1;
-      if (r.status === 'reconciled') reconciled++; else pending++;
-    }
-    return { total: rows.length, byHouse, pending, reconciled };
-  }, [rows]);
+  const stats = useMemo(() => computeRosterStats(rows), [rows]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
