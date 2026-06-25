@@ -12,7 +12,7 @@ Originated as a Google AI Studio applet (see README / `firebase-applet-config.js
 
 - **`INTEGRATION-PLAN.md`** — current roadmap: data sources (v2 ✅ / v1 ❌ / Firebase), Fase 0 (done), trilhas A–D, blockers, and the recommended next step (**B2 · date filters**, which also fixes the OTG×Boost commission discrepancy). The external **v1 API is NOT accessible** with our `x-api-key` (401); clicks/wager/channels/payment-cycle are blocked pending OTG access.
 - **`BACKLOG.md`** — sketches B1 (lucro líquido), B2 (date filters), B3 (sub-affiliates), B4 (banking data), B5 (admin access/visibility settings).
-- **`REVIEW-TEST-PLAN.md`** — plano de revisão total + testes (auditoria 2026-06). §0/§0.1 rastreiam o que já foi corrigido (Fase 1 money-math, Fase 1.1 byBrand, Fase 2 segurança) e o que falta (Fases 3-5: testes de services/páginas, tooling/CI, emulator de rules, supertest). **Leia antes de continuar a revisão.**
+- **`REVIEW-TEST-PLAN.md`** — plano de revisão total + testes (auditoria 2026-06). §0–§0.4 rastreiam **Fases 1–4 ENTREGUES** (money-math, byBrand, segurança + rules-emulator + supertest, services + AuthContext, páginas/fluxos + componentes; 381 testes + 42 de rules). **Falta só a Fase 5** (tooling/CI: `coverage.include`, thresholds por pasta, CI, fast-check, `firebase-tools` no devDeps). **Leia antes de continuar a revisão.**
 - **`public/mvp-inventario.html`** — static page (served at `/mvp-inventario.html`) cataloguing OTG dashboard data for the boss to qualify MVP scope.
 
 ## Commands
@@ -84,8 +84,8 @@ Esta seção destila os bugs reais que escaparam dos testes (auditoria 2026-06) 
 - **Taxa POR CASA (`byBrand[brandId]`) sobrepõe a de topo.** Resolva o brandId do afiliado com `buildBrandIdOf` (client) ou pelo mirror `affiliates` (server) — modelo "1 afiliado → 1 casa" (campo `brand`), o MESMO que `houseOf`/`calcNetProfitByHouse` do /admin. Passar `brandId` a `calcAffiliatePayout` é **no-op** p/ quem não tem override → seguro adicionar em qualquer call-site.
 - **Ausência de config ≠ R$0.** Use `rateStatus(config, brandId)` (detecta `typeof number`) p/ decidir "configurado" vs "não configurado" no display — nunca `cpaValue || 0`, que mostra um zero enganoso.
 - **Invariante "agregado == Σ dos cards".** O headline de lucro e o detalhamento por casa SAEM DA MESMA base escopada (`composeAdminProfit`); ao filtrar por marca, os dois escopam juntos.
-- **Nunca propague NaN.** A API externa manda número como string às vezes; `num()` coage antes de multiplicar.
-- **Lucro líquido/margem da agência só no `/admin` do master** — nunca na view do afiliado (`ClientDashboard`/sua própria `AffiliateDetails`).
+- **Nunca propague NaN.** `num()` = `Number.isFinite(Number(v)) ? Number(v) : 0` — guarda contra NaN/Infinity (string não-numérica/`null` → 0, não NaN) antes de multiplicar. **ATENÇÃO (achado 2026-06-24):** `num` só entende decimal com PONTO (`'2.5'`→2.5); **NÃO parseia vírgula pt-BR** (`'2,5'`→0, igual a `Number(v)||0`). Em prod os totais batem (a OTG manda número parseável), então é adequado — mas NÃO confie em `num` p/ parsear formato pt-BR (`'2.400,50'`→0). `parsePtNumber` foi cogitado no plano mas nunca implementado.
+- **Lucro líquido/margem da agência só no `/admin` do master** — nunca na view do afiliado. O gate do card "lucro líquido do afiliado" (`AffiliateDetails`) é `canViewAffiliateNetProfit` (`src/lib/affiliateView.ts` — admin OU especial vendo sub ≠ próprio id); `ClientDashboard` não importa NENHUMA função de lucro/margem. A margem da agência (`composeAdminProfit`) só existe no `AdminDashboard`.
 
 ### Segurança/escopo
 - **Dado sensível (taxas, PII) é mediado pelo servidor (Admin SDK) + rule `admin-only`; o cliente NUNCA lê direto.** Ex.: `affiliate_configs` → `GET /api/affiliate-configs` (escopa por papel: admin=todas; afiliado=própria+sub-rede). Espelha `payment_profiles`/`houses`. Ao adicionar dado sensível, siga este padrão (não `read: isSignedIn()`).
@@ -96,7 +96,10 @@ Esta seção destila os bugs reais que escaparam dos testes (auditoria 2026-06) 
 
 ### Testabilidade & processo
 - **Lógica testável vive em `src/lib/*` com teste colocado** (`*.test.ts`, descrições pt-BR, mock de `lib/firebase` e `lib/api`). Ao corrigir dinheiro/escopo numa página/rota, **extraia a função pura** e teste-a — não deixe a regra só no JSX/handler.
-- **`vitest.config.ts` `coverage.include` EXCLUI `pages/` e `server.ts`** (dívida conhecida — Fase 5 do REVIEW-TEST-PLAN). A métrica global esconde a superfície de maior risco; não confie nela como prova de cobertura.
+- **Rotas Express são testáveis via `createApp(deps)`** — `server.ts` exporta a factory (`startServer()` a chama e adiciona Vite/listen); `server.test.ts` (supertest) injeta mocks de Firestore/Auth (`adminApp.auth().verifyIdToken`)/`fetch`. **Use `// @vitest-environment node` no topo de QUALQUER teste que importe `server.ts`** — importar puxa `vite`→esbuild, cujo invariante de `TextEncoder` quebra sob jsdom.
+- **`firestore.rules` tem regressão no emulator:** `npm run test:rules` (`firebase emulators:exec` + `test/rules/*.spec.ts`, env node). Fica FORA do glob `src/**`, então `npm test` não a roda sem o emulator. Requer o **firebase CLI + Java** (convenção do repo; não está no devDeps ainda — Fase 5).
+- **Mock-padrão dos testes de service** (`services/*.test.ts`): `vi.mock` de `firebase/firestore` (collection/query/where/onSnapshot/...) + `../lib/firebase` (db) + `../lib/api` (authFetch); dirige o `onSnapshot` por `vi.mocked(onSnapshot).mock.calls[0][1]` (onNext) / `[0][2]` (onError). Template: `src/services/noticeService.test.ts`. Componentes que tocam `firebase/auth` → padrão `vi.hoisted` de `src/contexts/AuthContext.test.tsx`.
+- **`vitest.config.ts` `coverage.include` EXCLUI `pages/`, `server.ts` e `contexts/`** (dívida conhecida — Fase 5 do REVIEW-TEST-PLAN). Há testes reais cobrindo essas superfícies (`server.test.ts`, `AuthContext.test.tsx`, etc.), mas a MÉTRICA os ignora; não confie no número global como prova de cobertura.
 - **`server.ts` roda código ANTIGO até reiniciar o processo** (`tsx server.ts`, sem watch) — mudanças no servidor não aparecem no app rodando até `kill` + `npm run dev`. O frontend tem HMR (Vite middleware), então mudanças de página/lib aparecem na hora.
 - **Verificação no app usa o Firestore de PROD + rules DEPLOYADAS** (o client SDK fala direto com o Firestore). Mudança de `firestore.rules` só vale após `firebase deploy --only firestore:rules` (deploy é ação do operador).
 
@@ -131,6 +134,7 @@ Production runs on **Firebase App Hosting** (Cloud Run under the hood, same `age
   firebase apphosting:rollouts:create <backend-id> --project agencia-boost-app
   ```
 - Firebase Admin auth in production uses `FIREBASE_SERVICE_ACCOUNT_KEY` (the secret), same as local — no ADC/IAM-role wiring needed. `firestore.rules` is still deployed separately with `firebase deploy --only firestore:rules`.
+- **Cron diário do ranking** (`POST /api/internal/daily-ranking`, gated por `requireCronSecret`/header `x-cron-secret`): gera o `daily_rankings/{hoje-BR}` E manda um popup-lembrete ao admin master. Sem isso o ranking só sai por clique manual do admin no `/ranking`. Secrets: `ranking-cron-secret` (alto-entropia, gere com `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`) e `master-admin-email` (e-mail do admin que recebe o lembrete; vazio = todos os admins). Operador cria o **Cloud Scheduler** diário ~14h30 BR batendo no endpoint com o header. Sem `RANKING_CRON_SECRET` no ambiente a rota responde 503 (feature off). Ver memória `boost-notifications-ranking` p/ o comando `gcloud`.
 
 ## Important caveats
 
