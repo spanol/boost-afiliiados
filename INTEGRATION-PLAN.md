@@ -10,7 +10,7 @@
 | Fonte | Acesso | O que oferece |
 |-------|--------|---------------|
 | **API v2 externa** (`/api/v2/external`, `x-api-key` via proxy) | ✅ temos | `affiliates`, `results` (groupBy `affiliate`/`brand`/`date`/`campaign`), `campaigns` |
-| **API v1 interna** (`/api/v1/agency/{casa}-analytics`, JWT custom da agência) | 🟡 **alcançável pelo login do Carlos** (x-api-key dá 401; mas o dashboard usa Bearer JWT do login) — ver `SPIKE-OTG-V1-ANALYTICS.md` | **cliques**, valores em aposta (handle), **NGR**, canais, ciclo de pagamento — e **TODOS os afiliados** (inclui só-funil que a v2 esconde) |
+| **API v1 interna** (`/api/v1/agency/{casa}-analytics`, JWT custom da agência) | ✅ **INTEGRADA** (2026-06-26) — login durável server-side (`POST /api/v1/auth/login {email,password,deviceToken}`); ver `SPIKE-OTG-V1-ANALYTICS.md` | **cliques**, NGR, handle (bet_amount), depósitos — e **TODOS os afiliados** (inclui só-funil que a v2 esconde, ex.: "Lucas") |
 | **Firebase** (Auth + Firestore) | ✅ nosso | usuários/roles, configs CPA/REV, status, auditoria, convites, espelho de afiliados |
 
 **Conclusão-chave:** o MVP é 100% construível sobre a **v2 + Firebase**. Os dados exclusivos
@@ -45,17 +45,19 @@ do v1 dependem de a OTG liberar acesso (ver Trilha C).
 | **B4 · Dados bancários** (PIX/banco/CNPJ) | decisão + segurança (`firestore.rules` restrito) |
 | **B5 · Acessos/visualizações** (settings do admin master) | depende de definir os eixos (por-admin? por-tela?) |
 
-## Trilha C — POTENCIALMENTE DESBLOQUEÁVEL via login da agência 🟡 (era 🔴)
-Dados: **Cliques · Valores em Aposta (handle) · NGR · Canais · Ciclo de pagamento.**
-Não existem na v2 e o v1 exige JWT de sessão (nossa `x-api-key` dá 401).
-**ACHADO 2026-06-25** (ver **`SPIKE-OTG-V1-ANALYTICS.md`**): o dashboard `partners.grupootg.com`
-já consome a v1 (`GET /api/v1/agency/{casa}-analytics`, **com cliques + NGR + TODOS os afiliados**,
-inclusive os só-funil que a v2 esconde — caso "Lucas Guimarães"). A auth é **JWT custom da agência**
-(Bearer, token no localStorage; NÃO Supabase), obtido pelo PRÓPRIO login do Carlos — então
-**não precisamos pedir API key nova à OTG**; dá para automatizar server-side com as creds do Carlos
-(mesmo padrão do `otgLinksPull.ts`, mas login custom, não Supabase). **Pendência de operador:**
-capturar o request de login + 1 de analytics (DevTools › Network) e fornecer as creds via Secret Manager.
-O rascunho de pedido à OTG (abaixo) vira plano B.
+## Trilha C — ✅ ENTREGUE (2026-06-26) · cliques + funil da v1 (era 🟡, antes 🔴)
+Dados desbloqueados: **Cliques · Handle (bet_amount) · NGR · Depósitos · TODOS os afiliados**
+(inclui os só-funil que a v2 esconde — caso "Lucas Guimarães"). Canais/ciclo de pagamento
+seguem fora (não vêm neste endpoint).
+**Como ficou** (ver **`SPIKE-OTG-V1-ANALYTICS.md › ✅ ENTREGUE`** p/ o contrato completo):
+- Auth **durável server-side**: `POST /api/v1/auth/login {email,password,deviceToken}` → access_token
+  (~15min, cacheado); o `deviceToken` (verified-2fa, ~8h) pula o 2FA. Sem pedir API key nova à OTG.
+- Pull resiliente por casa (`sportingbet-analytics` 200; `superbet-analytics` 404 → indisponível),
+  persistência em `affiliate_analytics` + reconciliação/enriquecimento dos `pending_affiliates`.
+- Rotas: `POST /api/analytics/refresh` (admin, botão no `/otg-roster`), `POST /api/internal/analytics-refresh`
+  (cron), `GET /api/affiliate-analytics` (escopado). UI: card de cliques + fix do crash do Lucas.
+- **Validado ao vivo em prod** (smoke test: 33 gravados / 33 pendentes enriquecidos).
+**Pendência só de operador:** secrets de prod + deploy rules + push + Cloud Scheduler (ver SPIKE).
 
 ## Trilha D — B3 · Afiliado especial (sub-afiliados) 🟡 em implementação
 - A "feature incompleta" de 28/05 **era este afiliado especial** (não havia sistema legado).
@@ -81,7 +83,7 @@ Antes não havia test runner. Fundação montada com **Vitest + React Testing Li
 ---
 
 ## Bloqueadores a resolver (fora de código)
-1. **Acesso à API v1 da OTG** → libera a Trilha C.
+1. ~~**Acesso à API v1 da OTG**~~ ✅ **resolvido** (2026-06-26) — login durável com as creds do Carlos (não precisou de API key nova). Trilha C entregue.
 2. ~~Origem da feature de sub-afiliado~~ ✅ **resolvido** — era o afiliado especial (B3), em implementação.
 3. **Comissão do especial + regras do lucro líquido (B1)** → roteiro consolidado pro Carlos em `BACKLOG.md › B3`; destrava o B1 e a Fase 4 do B3.
 4. **Qualificação do MVP pelo chefe** → trava o escopo da Trilha B.

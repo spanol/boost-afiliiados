@@ -1,5 +1,22 @@
 # Spike — integrar a API v1 analítica da OTG (cliques + funil inicial)
 
+> ## ✅ ENTREGUE (2026-06-25/26) — commits `4294b2f` → `78dfe4e` (6), 475 testes verdes
+>
+> A integração foi **implementada e validada ao vivo contra produção** (smoke test:
+> `persisted:33, enrichedPending:33`, doc do Lucas confirmado na Firestore). O que ficou pronto:
+>
+> **Contrato real da API v1 (capturado ao vivo, não mais palpite):**
+> - **Analytics:** `GET {BASE}/api/v1/agency/{casa}-analytics?initialDate&finalDate&scope=AFFILIATES&page&pageSize`
+>   → `{data:{summary, rows:[{affiliate,clicks,registrations,ftd,cpa_qual,deposits,bet_amount,ngr}], meta:{totalPages,...}}}`.
+>   `scope=AFFILIATES` (maiúsculo; `affiliate` dá 400). Só `sportingbet-analytics` existe — `superbet-analytics` dá **404** (tratado como casa indisponível). Casas em `GET /api/v1/betting-houses`.
+> - **AUTH (resolvida):** NÃO é só token manual. `POST /api/v1/auth/login {email,password,deviceToken}` → `{data:{access_token (~15min), deviceToken}}`. O **`deviceToken`** (= localStorage `2fa:login.token`, JWT `type:"verified-2fa"`, **~8h**) PULA o 2FA. NÃO há refresh-token (o login É o refresh). O server loga sob demanda e cacheia o access_token. Carlos só troca o deviceToken a cada ~8h.
+>
+> **Construído:** `otgAnalyticsPull.ts` (login durável + pull resiliente por casa), `src/lib/otgAnalytics.ts` (mapper puro) + `src/lib/analyticsDoc.ts` (persistência pura); rotas `POST /api/analytics/refresh` (admin), `POST /api/internal/analytics-refresh` (cron, `requireCronSecret`), `GET /api/affiliate-analytics` (escopado por papel); coleção `affiliate_analytics` (admin-only) + enriquecimento dos `pending_affiliates`; UI: botão "Atualizar funil (v1)" no `/otg-roster`, card de cliques no `AffiliateDetails` + **degradação graciosa do crash do Lucas** (mostra o funil em vez de "Algo deu errado").
+>
+> **Env (server-only):** `OTG_DASH_API_BASE`, `OTG_DASH_EMAIL`, `OTG_DASH_PASSWORD`, `OTG_DASH_DEVICE_TOKEN` (`OTG_DASH_ACCESS_TOKEN` = override manual opcional). Ver `.env.example` + `apphosting.yaml`.
+>
+> **Pendências de operador (não-código):** criar os secrets de prod (`firebase apphosting:secrets:set otg-dash-{email,password,device-token} --data-file -`); `firebase deploy --only firestore:rules` (inclui `affiliate_analytics`); `git push` dos 6 commits; criar o Cloud Scheduler diário batendo em `/api/internal/analytics-refresh` (header `x-cron-secret` = `RANKING_CRON_SECRET`). O texto abaixo é o registro da investigação original.
+
 **Data:** 2026-06-25 · **Gatilho:** "Lucas Guimarães" aparece com produção no dashboard da OTG mas o Boost o mostra como sem produção (e a tela de detalhes quebra). Investigação via interceptação do dashboard `partners.grupootg.com`.
 
 ## 1. Problema confirmado
