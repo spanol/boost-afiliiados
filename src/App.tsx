@@ -25,6 +25,7 @@ import OtgRoster from './pages/OtgRoster';
 import Houses from './pages/Houses';
 import NotFound from './pages/NotFound';
 import DashboardLayout from './components/DashboardLayout';
+import UpdateBanner from './components/UpdateBanner';
 
 // Página inicial do afiliado: especial → painel da sub-rede (/network); afiliado
 // comum → a própria visão de dados em /affiliates/{id}; sem affiliateId → perfil.
@@ -143,6 +144,9 @@ export default function App() {
           {/* Catch-all: rotas desconhecidas do SPA caem numa 404 branded. */}
           <Route path="*" element={<NotFound />} />
           </Routes>
+          {/* Banner global de atualização (controle de versão): visível em qualquer
+              rota autenticada quando o bundle está desatualizado. */}
+          <UpdateBanner />
         </ToastProvider>
         </AuthProvider>
     </ThemeProvider>

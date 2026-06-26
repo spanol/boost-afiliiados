@@ -28,6 +28,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useTheme } from '../contexts/ThemeContext';
 import NotificationBell from './NotificationBell';
 import DirectMessagePopup from './DirectMessagePopup';
+import { LOCAL_VERSION } from '../lib/version';
 
 const boostLogo = `${import.meta.env.BASE_URL}boost-home/logo.svg`;
 
@@ -196,6 +197,10 @@ export default function DashboardLayout() {
           <LogOut size={16} />
           Encerrar Sessão
         </button>
+        {/* Versão do bundle carregado (controle de versão). */}
+        <p className="mt-3 text-center text-[10px] font-medium text-slate-300 dark:text-neutral-600 tracking-wider">
+          v{LOCAL_VERSION}
+        </p>
       </div>
     </div>
   );
