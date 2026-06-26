@@ -16,6 +16,7 @@ import {
   createBoostAffiliates,
   createEmailAlias,
   fetchEmailAliases,
+  manualForAffiliates,
   extractArray,
   extractApiError,
   isNoDataError,
@@ -34,6 +35,24 @@ import {
 } from './affiliateService';
 import { StoredManualRow, emptyMetrics, addMetrics } from '../lib/houseResults';
 import fc from 'fast-check';
+
+describe('manualForAffiliates · aceita id único, array e CSV de rede', () => {
+  const rows: StoredManualRow[] = [
+    { houseSlug: 'betfair', date: '2026-06-24', affiliateId: 'a', ...addMetrics(emptyMetrics(), { qualified_cpa: 3 }) },
+    { houseSlug: 'betfair', date: '2026-06-24', affiliateId: 'b', ...addMetrics(emptyMetrics(), { qualified_cpa: 2 }) },
+    { houseSlug: 'betfair', date: '2026-06-24', affiliateId: null, ...addMetrics(emptyMetrics(), { qualified_cpa: 9 }) },
+  ];
+  it('id único casa só o dele; null (agregado) nunca casa', () => {
+    expect(manualForAffiliates(rows, ['a']).map((r) => r.affiliateId)).toEqual(['a']);
+  });
+  it('array de ids casa todos', () => {
+    expect(manualForAffiliates(rows, ['a', 'b']).map((r) => r.affiliateId).sort()).toEqual(['a', 'b']);
+  });
+  it('CSV de rede ("a,b") casa a E b (fix 2026-06-26 — antes não casava nenhum)', () => {
+    expect(manualForAffiliates(rows, ['a,b']).map((r) => r.affiliateId).sort()).toEqual(['a', 'b']);
+    expect(manualForAffiliates(rows, [' a , b ']).map((r) => r.affiliateId).sort()).toEqual(['a', 'b']);
+  });
+});
 
 describe('fetchAffiliates · une nativos Boost (Boost-first)', () => {
   const okJson = (body: any) => ({ ok: true, json: async () => body });

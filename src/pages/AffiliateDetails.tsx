@@ -399,6 +399,14 @@ export default function AffiliateDetails() {
   // caso só-funil (id sintético fora da v2, ex.: "Lucas"). sumFunnelForAffiliate é puro.
   const funnelTotals = sumFunnelForAffiliate(funnelRows, { affiliateId: id, nameKey: affiliate?.name || affiliate?.label });
 
+  // Atividade real de resultado no período (v2 OTG + manual, já mesclados em `results`).
+  // Usado p/ NÃO mostrar o banner "em captação · sem comissão · zerados" quando há
+  // resultado de verdade — ex.: resultado manual de casa atribuído ao afiliado (2026-06-26).
+  const resultTotals = sumResultRows(results);
+  const hasResultActivity = resultTotals.qualified_cpa > 0 || resultTotals.rvs > 0
+    || resultTotals.registrations > 0 || resultTotals.first_deposits > 0
+    || resultTotals.deposit > 0 || resultTotals.total_commission > 0;
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
@@ -615,7 +623,7 @@ export default function AffiliateDetails() {
           {/* Informativo de captação: afiliado SÓ-FUNIL (cliques/cadastros, sem comissão
               ainda na v2). Substitui o antigo card degradado — agora a dashboard padrão
               aparece zerada e este banner contextualiza o porquê. [[boost-v1-analytics-integration]] */}
-          {funnelTotals.funnelOnly && funnelTotals.matched > 0 && (
+          {funnelTotals.funnelOnly && funnelTotals.matched > 0 && !hasResultActivity && (
             <div className="bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200/70 dark:border-amber-900/40 rounded-3xl p-6 shadow-sm">
               <div className="inline-flex items-center gap-1.5 px-2.5 py-1 mb-3 rounded-lg bg-amber-500/10 text-amber-700 dark:text-amber-400 text-[11px] font-bold">
                 <Clock size={12} /> Em captação — sem comissão ainda

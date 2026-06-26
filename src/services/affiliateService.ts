@@ -521,8 +521,13 @@ async function fetchManualRowsSafe(opts: DateRangeOpts): Promise<StoredManualRow
 }
 
 // Mantém só as linhas ATRIBUÍDAS a um conjunto de afiliados (descarta agregados).
-function manualForAffiliates(rows: StoredManualRow[], ids: (string | number)[]): StoredManualRow[] {
-  const set = new Set(ids.map(String));
+export function manualForAffiliates(rows: StoredManualRow[], ids: (string | number)[]): StoredManualRow[] {
+  // Aceita ids soltos OU CSV ("id1,id2") — a view de REDE (especial+subs) passa o
+  // CSV cru a fetchAffiliateResultsByBrand/Daily/Campaign; sem o split o manual da
+  // rede não casava e a casa aparecia R$0 no por-casa do afiliado (bug 2026-06-26).
+  const set = new Set(
+    ids.flatMap((x) => String(x).split(',')).map((s) => s.trim()).filter(Boolean)
+  );
   return rows.filter((r) => r.affiliateId !== null && set.has(String(r.affiliateId)));
 }
 
