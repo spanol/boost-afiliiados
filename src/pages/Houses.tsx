@@ -535,13 +535,15 @@ function HouseResultsModal({ house, onClose }: { house: House; onClose: () => vo
     }
   };
 
-  // Afiliados existentes p/ o "Vincular a existente" (só com nome, ordenado).
+  // Afiliados existentes p/ o "Vincular a existente" (nome + e-mails p/ desambiguar
+  // homônimos — ex.: dois "Thales" distintos no roster). A busca casa por nome, id OU
+  // e-mail, então o operador pode colar o próprio e-mail da linha pra achar o dono.
   const linkOptions = useMemo(() => {
     const q = linkQuery.trim().toLowerCase();
     return (roster as any[])
       .filter((r) => r.name && String(r.name).trim())
-      .map((r) => ({ id: r.id as string, name: humanizeName(String(r.name)) }))
-      .filter((r) => !q || r.name.toLowerCase().includes(q) || r.id.toLowerCase().includes(q))
+      .map((r) => ({ id: r.id as string, name: humanizeName(String(r.name)), emails: (r.emails as string[]) || [] }))
+      .filter((r) => !q || r.name.toLowerCase().includes(q) || r.id.toLowerCase().includes(q) || r.emails.some((e) => e.toLowerCase().includes(q)))
       .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
       .slice(0, 30);
   }, [roster, linkQuery]);
@@ -831,6 +833,9 @@ function HouseResultsModal({ house, onClose }: { house: House; onClose: () => vo
                                     className="block w-full text-left px-2 py-1.5 text-[11px] text-slate-600 dark:text-neutral-300 hover:bg-amber-500/10"
                                   >
                                     {o.name}
+                                    {o.emails.length > 0 && (
+                                      <span className="text-slate-400 dark:text-neutral-500"> ({o.emails.join(', ')})</span>
+                                    )}
                                   </button>
                                 ))}
                               </div>
