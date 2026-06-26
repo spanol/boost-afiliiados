@@ -2082,8 +2082,30 @@ export function createApp(deps: ServerDeps) {
       let rows = snap.docs.map((d) => d.data() as any);
       if (houseSlug) rows = rows.filter((r) => r.houseSlug === houseSlug);
       if (user?.role !== 'admin') {
-        const aff = user?.affiliateId ? String(user.affiliateId) : null;
-        rows = aff ? rows.filter((r) => String(r.affiliateId ?? '') === aff) : [];
+        // Escopo da sub-rede resolvido NO SERVIDOR (special_affiliates), MESMO padrão
+        // do proxy externo (R4): o especial ATIVO vê o manual atribuído a own + subs;
+        // o afiliado comum só ao próprio id. Sem isso a /network do especial
+        // subcontava — não via o manual dos subs (o OTG já vem escopado à rede pelo
+        // proxy). O agregado/não-atribuído (affiliateId null) nunca entra no escopo
+        // permitido, então não vaza o total da casa. [[boost-houses-backoffice]]
+        let special: any = null;
+        if (user?.affiliateId) {
+          try {
+            const specialSnap = await adminDb.collection('special_affiliates').doc(String(user.affiliateId)).get();
+            special = specialSnap.exists ? (specialSnap.data() as any) : null;
+          } catch (e) {
+            console.error('Erro ao carregar sub-rede do afiliado especial:', e);
+          }
+        }
+        const decision = resolveScopedAffiliateIds({
+          role: user?.role,
+          endpoint: 'results',
+          ownAffiliateId: user?.affiliateId,
+          special,
+        });
+        if (decision.denied) return res.status(decision.denied.status).json({ error: decision.denied.error });
+        const allowed = new Set(decision.scoped ?? []);
+        rows = rows.filter((r) => allowed.has(String(r.affiliateId ?? '')));
       }
       rows = rows.map((r) => ({
         houseSlug: r.houseSlug,

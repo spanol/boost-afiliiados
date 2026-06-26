@@ -223,28 +223,46 @@ describe('proxy externo / IDOR (R4)', () => {
 // R16 — escopo do house-results: o agregado (affiliateId null) não vaza
 // =============================================================================
 describe('house-results scope (R16)', () => {
+  // AFF-1 é ESPECIAL ativo com a sub-rede [AFF-2]; AFF-3 é afiliado comum.
   const seed = {
     users: {
       'admin-uid': { role: 'admin' },
       'aff1-uid': { role: 'client', affiliateId: 'AFF-1' },
+      'aff3-uid': { role: 'client', affiliateId: 'AFF-3' },
+    },
+    special_affiliates: {
+      'AFF-1': { active: true, subAffiliateIds: ['AFF-2'] },
     },
     house_results: {
       r1: { houseSlug: 'sb', date: '2026-06-01', affiliateId: 'AFF-1' },
       r2: { houseSlug: 'sb', date: '2026-06-01', affiliateId: 'AFF-2' },
+      r3: { houseSlug: 'sb', date: '2026-06-01', affiliateId: 'AFF-3' },
       agg: { houseSlug: 'sb', date: '2026-06-01', affiliateId: null },
     },
   };
 
-  it('client vê só as próprias linhas — nunca a de outro nem a agregada (null)', async () => {
+  it('afiliado comum vê só as próprias linhas — nunca a de outro nem a agregada (null)', async () => {
+    const res = await request(buildApp({ seed }))
+      .get('/api/house-results')
+      .set('Authorization', 'Bearer aff3-uid')
+      .expect(200);
+    const rows = res.body.rows as any[];
+    expect(rows).toHaveLength(1);
+    expect(rows[0].affiliateId).toBe('AFF-3');
+    expect(rows.some((r) => r.affiliateId === null)).toBe(false);
+    expect(rows.some((r) => r.affiliateId !== 'AFF-3')).toBe(false);
+  });
+
+  it('especial ativo vê o manual de own + subs — mas nunca o agregado nem fora da rede', async () => {
     const res = await request(buildApp({ seed }))
       .get('/api/house-results')
       .set('Authorization', 'Bearer aff1-uid')
       .expect(200);
     const rows = res.body.rows as any[];
-    expect(rows).toHaveLength(1);
-    expect(rows[0].affiliateId).toBe('AFF-1');
-    expect(rows.some((r) => r.affiliateId === null)).toBe(false);
-    expect(rows.some((r) => r.affiliateId === 'AFF-2')).toBe(false);
+    const ids = rows.map((r) => r.affiliateId).sort();
+    expect(ids).toEqual(['AFF-1', 'AFF-2']); // own + sub
+    expect(rows.some((r) => r.affiliateId === null)).toBe(false); // agregado não vaza
+    expect(rows.some((r) => r.affiliateId === 'AFF-3')).toBe(false); // fora da rede não vaza
   });
 
   it('admin vê todas as linhas, inclusive a agregada', async () => {
@@ -252,7 +270,7 @@ describe('house-results scope (R16)', () => {
       .get('/api/house-results')
       .set('Authorization', 'Bearer admin-uid')
       .expect(200);
-    expect((res.body.rows as any[]).length).toBe(3);
+    expect((res.body.rows as any[]).length).toBe(4);
   });
 });
 
