@@ -49,6 +49,15 @@ export default function DashboardLayout() {
       .catch(() => {});
   }, []);
 
+  // Trava o scroll do body enquanto o menu mobile está aberto — sem isso o scroll
+  // do drawer "vaza" pra página de trás (scroll chaining) e ela rola junto.
+  useEffect(() => {
+    if (!isMobileMenuOpen) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = previous; };
+  }, [isMobileMenuOpen]);
+
   // Só o master tem os itens "Afiliados"/"Afiliados Especiais" na sidebar e navega
   // para /affiliates/:id; carrega o registro de especiais uma vez para saber a qual
   // item de lista a tela de detalhe pertence (destaque do menu). Falha silenciosa.
@@ -138,7 +147,7 @@ export default function DashboardLayout() {
         </Link>
       </div>
 
-      <nav className="flex-1 px-4 space-y-1">
+      <nav className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 space-y-1">
         {menuItems.map((group, idx) => (
           <div key={idx} className="pt-4 first:pt-0">
             <h3 className="px-3 text-[10px] uppercase tracking-widest font-bold text-slate-400 dark:text-neutral-500 mb-2">
@@ -286,19 +295,23 @@ export default function DashboardLayout() {
               onClick={() => setIsMobileMenuOpen(false)}
               className="fixed inset-0 bg-black/20 backdrop-blur-sm z-30 lg:hidden"
             />
-            <motion.div 
+            <motion.div
               initial={{ x: '100%' }}
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-              className="fixed right-0 top-0 bottom-0 w-80 bg-white dark:bg-neutral-950 z-40 lg:hidden shadow-2xl"
+              className="fixed right-0 top-0 bottom-0 w-80 max-w-[85vw] bg-white dark:bg-neutral-950 z-40 lg:hidden shadow-2xl flex flex-col"
             >
-              <div className="p-4 flex justify-end">
+              <div className="p-4 flex justify-end shrink-0">
                 <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 text-slate-500 dark:text-neutral-400">
                   <X size={24} />
                 </button>
               </div>
-              <SidebarContent />
+              {/* Altura limitada (drawer menos a barra do X) + min-h-0 para a nav rolar
+                  internamente e o rodapé (logout/versão) ficar sempre visível. */}
+              <div className="flex-1 min-h-0">
+                <SidebarContent />
+              </div>
             </motion.div>
           </>
         )}
