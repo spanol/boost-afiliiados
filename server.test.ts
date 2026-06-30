@@ -30,12 +30,14 @@ function makeFirestore(seed: Record<string, Record<string, any>> = {}): any {
   for (const [col, docs] of Object.entries(seed)) {
     store.set(col, new Map(Object.entries(docs)));
   }
+  let autoId = 0; // p/ doc() sem id (audit_logs/user_notifications)
   const getCol = (name: string) => {
     if (!store.has(name)) store.set(name, new Map());
     return store.get(name)!;
   };
   const docRef = (col: string, id: string): any => ({
     id,
+    __col: col, // usado pelo batch() p/ saber a coleção do ref
     get ref() {
       return this;
     },
@@ -49,6 +51,9 @@ function makeFirestore(seed: Record<string, Record<string, any>> = {}): any {
       if (opts?.merge) m.set(id, { ...(m.get(id) || {}), ...data });
       else m.set(id, data);
     },
+    async delete() {
+      getCol(col).delete(id);
+    },
   });
   const query = (col: string, filters: Array<[string, string, any]> = []): any => ({
     where(field: string, op: string, val: any) {
@@ -57,8 +62,8 @@ function makeFirestore(seed: Record<string, Record<string, any>> = {}): any {
     limit() {
       return query(col, filters);
     },
-    doc(id: string) {
-      return docRef(col, id);
+    doc(id?: string) {
+      return docRef(col, id ?? `auto-${++autoId}`);
     },
     async add(data: any) {
       const m = getCol(col);
@@ -87,6 +92,24 @@ function makeFirestore(seed: Record<string, Record<string, any>> = {}): any {
   });
   return {
     collection: (name: string) => query(name),
+    batch: () => {
+      const writes: Array<() => void> = [];
+      return {
+        set(ref: any, data: any, opts?: any) {
+          writes.push(() => {
+            const m = getCol(ref.__col);
+            if (opts?.merge) m.set(ref.id, { ...(m.get(ref.id) || {}), ...data });
+            else m.set(ref.id, data);
+          });
+        },
+        delete(ref: any) {
+          writes.push(() => getCol(ref.__col).delete(ref.id));
+        },
+        async commit() {
+          writes.forEach((fn) => fn());
+        },
+      };
+    },
     __store: store,
   };
 }
@@ -208,6 +231,61 @@ describe('auditoria — status do afiliado grava audit_logs server-side', () => 
       .send({ status: 'nope' })
       .expect(400);
     expect(db.__store.get('audit_logs')?.size ?? 0).toBe(0);
+  });
+});
+
+// =============================================================================
+// Fase 2 — import de resultados: auditoria atômica + notificação ao afiliado
+// =============================================================================
+describe('import de resultados grava log + notifica o afiliado atribuído', () => {
+  const seed = {
+    users: {
+      'admin-uid': { role: 'admin', name: 'Master' },
+      'aff-login-1': { role: 'client', affiliateId: 'AFF-1', name: 'Lucas' },
+    },
+    houses: { betano: { slug: 'betano', name: 'Betano', dataSource: 'manual' } },
+  };
+
+  it('grava resultados + audit house_results.import + 1 notificação de contagens', async () => {
+    const db = makeFirestore(seed);
+    const app = createApp({ adminApp: makeAdminApp(), adminDb: db });
+    const res = await request(app)
+      .post('/api/house-results/import')
+      .set('Authorization', 'Bearer admin-uid')
+      .send({
+        houseSlug: 'betano',
+        rows: [
+          { date: '2026-06-20', affiliateId: 'AFF-1', registrations: 3, first_deposits: 1, qualified_cpa: 2 },
+          { date: '2026-06-20', affiliateId: null, registrations: 10 }, // agregado → não notifica
+        ],
+      })
+      .expect(200);
+    expect(res.body).toMatchObject({ ok: true, imported: 2, notified: 1 });
+    expect(db.__store.get('house_results')?.size ?? 0).toBe(2);
+
+    const logs = [...(db.__store.get('audit_logs')?.values() ?? [])];
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toMatchObject({ entityType: 'house_results', entityId: 'betano', action: 'house_results.import', actorId: 'admin-uid' });
+    expect(logs[0].metadata).toMatchObject({ imported: 2, attributedAffiliates: 1 });
+
+    const notifs = [...(db.__store.get('user_notifications')?.values() ?? [])];
+    expect(notifs).toHaveLength(1);
+    expect(notifs[0]).toMatchObject({ recipientUid: 'aff-login-1', affiliateId: 'AFF-1', type: 'results_updated', houseSlug: 'betano' });
+    expect(notifs[0].body).toContain('3 novos cadastros');
+    expect(notifs[0].body).not.toContain('R$'); // variante 'counts' (default)
+  });
+
+  it('afiliado SEM login vinculado → notified=0, mas o import ainda é auditado', async () => {
+    const db = makeFirestore({ users: { 'admin-uid': { role: 'admin' } }, houses: seed.houses });
+    const app = createApp({ adminApp: makeAdminApp(), adminDb: db });
+    const res = await request(app)
+      .post('/api/house-results/import')
+      .set('Authorization', 'Bearer admin-uid')
+      .send({ houseSlug: 'betano', rows: [{ date: '2026-06-20', affiliateId: 'AFF-1', registrations: 3 }] })
+      .expect(200);
+    expect(res.body.notified).toBe(0);
+    expect(db.__store.get('user_notifications')?.size ?? 0).toBe(0);
+    expect(db.__store.get('audit_logs')?.size ?? 0).toBe(1);
   });
 });
 

@@ -3,19 +3,26 @@ import { useNavigate } from 'react-router-dom';
 import { Bell } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { cn } from '../lib/utils';
+import type { Timestamp } from 'firebase/firestore';
 import { Notice, subscribeToNotices, isNoticeForUser, countUnreadNotices } from '../services/noticeService';
+import { UserNotification, subscribeToMyNotifications } from '../services/userNotificationService';
 
-// Sino do header: mostra os avisos relevantes ao usuário + um badge de não-lidos.
-// "Não-lido" é derivado de um marcador local (localStorage) por uid — MVP sem
-// gravação extra no Firestore. Ao abrir o painel, marca tudo como visto.
+// Sino do header: junta os AVISOS broadcast (notices) + as NOTIFICAÇÕES de sistema do
+// próprio usuário (user_notifications — ex.: "novos resultados na casa X"). Badge de
+// não-lidos derivado de um marcador local (localStorage) por uid — MVP sem gravação
+// extra no Firestore. Ao abrir o painel, marca tudo como visto.
 function seenKey(uid?: string) {
   return `boost_notices_seen_${uid ?? 'anon'}`;
 }
+
+// Item unificado do feed do sino (aviso broadcast OU notificação pessoal).
+type FeedItem = { id: string; title: string; body: string; createdAt: Timestamp | null; target: string };
 
 export default function NotificationBell() {
   const { user, profile } = useAuth();
   const navigate = useNavigate();
   const [notices, setNotices] = useState<Notice[]>([]);
+  const [personal, setPersonal] = useState<UserNotification[]>([]);
   const [open, setOpen] = useState(false);
   const [lastSeen, setLastSeen] = useState<number>(0);
 
@@ -32,10 +39,30 @@ export default function NotificationBell() {
     return () => unsubscribe();
   }, []);
 
-  const visible = useMemo(() => {
+  // Notificações de sistema do próprio usuário (só com login). Admin não recebe
+  // "novos resultados" (recipientUid nunca bate), então a lista fica vazia p/ ele.
+  useEffect(() => {
+    if (!user?.uid) { setPersonal([]); return; }
+    const unsubscribe = subscribeToMyNotifications(
+      user.uid,
+      (data) => setPersonal(data),
+      (err) => console.error('Erro ao carregar notificações (sino):', err),
+    );
+    return () => unsubscribe();
+  }, [user?.uid]);
+
+  // Feed unificado, ordenado por data desc. Avisos levam a /avisos; notificações
+  // de resultado levam ao painel do afiliado (onde ele vê os números).
+  const visible = useMemo<FeedItem[]>(() => {
     const isAdmin = profile?.role === 'admin';
-    return notices.filter((n) => (isAdmin ? n.active : isNoticeForUser(n, profile)));
-  }, [notices, profile]);
+    const noticeItems: FeedItem[] = notices
+      .filter((n) => (isAdmin ? n.active : isNoticeForUser(n, profile)))
+      .map((n) => ({ id: `notice-${n.id}`, title: n.title, body: n.body, createdAt: n.createdAt, target: '/avisos' }));
+    const personalItems: FeedItem[] = personal
+      .map((p) => ({ id: `notif-${p.id}`, title: p.title, body: p.body, createdAt: p.createdAt, target: '/dashboard' }));
+    return [...noticeItems, ...personalItems]
+      .sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0));
+  }, [notices, personal, profile]);
 
   const unread = useMemo(() => countUnreadNotices(visible, lastSeen), [visible, lastSeen]);
 
@@ -86,7 +113,7 @@ export default function NotificationBell() {
                 visible.slice(0, 8).map((n) => (
                   <button
                     key={n.id}
-                    onClick={() => { setOpen(false); navigate('/avisos'); }}
+                    onClick={() => { setOpen(false); navigate(n.target); }}
                     className="w-full text-left px-4 py-3 hover:bg-slate-50 dark:hover:bg-white/[0.03] transition-colors"
                   >
                     <p className="text-xs font-bold text-slate-800 dark:text-neutral-100 truncate">{n.title}</p>

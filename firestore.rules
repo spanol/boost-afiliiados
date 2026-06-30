@@ -190,6 +190,16 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Notificações de SISTEMA por afiliado (ex.: "novos resultados na casa X" quando
+    // o admin sobe um upload). Cada doc carrega o `recipientUid`; leitura escopada a
+    // ele (query segura, mesmo padrão de direct_messages). Escrita SÓ pelo servidor
+    // (Admin SDK ignora estas regras) — `write:false` trava qualquer cliente, inclusive
+    // admin, já que o sistema é quem gera. [[boost-results-notification]]
+    match /user_notifications/{notifId} {
+      allow read: if isSignedIn() && resource.data.recipientUid == request.auth.uid;
+      allow write: if false;
+    }
+
     // Ranking diário (snapshot calculado no servidor com a x-api-key da OTG, que o
     // afiliado não tem acesso pra montar sozinho). Doc id = data YYYY-MM-DD. Leitura
     // liberada a signed-in (leaderboard público com nomes — decisão de produto);

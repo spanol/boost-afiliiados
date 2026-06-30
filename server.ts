@@ -22,6 +22,7 @@ import { pullApprovedRoster, isOtgLinksConfigured } from './otgLinksPull';
 import { pullAnalytics, isOtgAnalyticsConfigured } from './otgAnalyticsPull';
 import { analyticsDocId, funnelKey, sanitizeFunnel, hasFunnelActivity } from './src/lib/analyticsDoc';
 import { buildVersionPayload, type AppVersion } from './src/lib/version';
+import { buildResultsNotification, type ResultsNotificationVariant } from './src/lib/resultsNotification';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -195,6 +196,65 @@ export function createApp(deps: ServerDeps) {
     } catch (e) {
       console.error('[audit] falha ao gravar log:', e);
     }
+  }
+  // Anexa o log ao MESMO WriteBatch da mutação (atômico). Use em rotas que já batcham
+  // (ex.: import de resultados via commitChunked).
+  function appendAuditLog(batch: admin.firestore.WriteBatch, req: express.Request, f: AuditFields): void {
+    if (!adminDb) return;
+    batch.set(adminDb.collection('audit_logs').doc(), auditEntry(req, f));
+  }
+  // Diff antes→depois dos campos que de fato mudaram (compara por valor serializado).
+  function diffChanges(before: Record<string, unknown> | undefined, patch: Record<string, unknown>, fields: string[]): AuditChange[] {
+    const changes: AuditChange[] = [];
+    for (const field of fields) {
+      if (!(field in patch)) continue;
+      const b = before?.[field] ?? null;
+      const a = patch[field] ?? null;
+      if (JSON.stringify(b) !== JSON.stringify(a)) changes.push({ field, before: b, after: a });
+    }
+    return changes;
+  }
+
+  // Notificação "novos resultados" (decisão do produto): variante de CONTAGENS ativa;
+  // 'money' (R$) fica pronta mas só liga via env RESULTS_NOTIFICATION_VARIANT=money.
+  const RESULTS_NOTIF_VARIANT: ResultsNotificationVariant =
+    process.env.RESULTS_NOTIFICATION_VARIANT === 'money' ? 'money' : 'counts';
+
+  type ResultMetricsAgg = { registrations: number; first_deposits: number; qualified_cpa: number; total_commission: number };
+  // Cria as notificações "novos resultados" (user_notifications) p/ cada afiliado
+  // ATRIBUÍDO no upload. Resolve os logins vinculados (users.affiliateId) — afiliado
+  // sem login Boost não recebe (ninguém p/ notificar). Best-effort; devolve quantos
+  // docs criou (um afiliado pode ter >1 login). 1 notificação por afiliado por upload.
+  async function notifyAffiliatesOfResults(
+    houseSlug: string,
+    houseName: string,
+    byAff: Map<string, ResultMetricsAgg>,
+  ): Promise<number> {
+    if (!adminDb || byAff.size === 0) return 0;
+    const batch = adminDb.batch();
+    let created = 0;
+    for (const [affiliateId, m] of byAff) {
+      const usersSnap = await adminDb.collection('users').where('affiliateId', '==', affiliateId).get();
+      if (usersSnap.empty) continue;
+      const { title, body } = buildResultsNotification(houseName, m, RESULTS_NOTIF_VARIANT);
+      usersSnap.forEach((u) => {
+        const ref = adminDb!.collection('user_notifications').doc();
+        batch.set(ref, {
+          recipientUid: u.id,
+          affiliateId,
+          type: 'results_updated',
+          houseSlug,
+          houseName,
+          title,
+          body,
+          readAt: null,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+        created++;
+      });
+    }
+    if (created > 0) await batch.commit();
+    return created;
   }
 
   // --- Partner auth (M2M) ---------------------------------------------------
@@ -2068,6 +2128,10 @@ export function createApp(deps: ServerDeps) {
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       });
+      await writeAuditLog(req, {
+        entityType: 'house', entityId: slug, entityLabel: cleanName, action: 'house.create',
+        metadata: { dataSource: dataSource === 'otg' ? 'otg' : 'manual' },
+      });
       return res.status(201).json(houseFromDoc(await ref.get()));
     } catch (e: any) {
       console.error('[houses] erro ao criar:', e);
@@ -2100,6 +2164,18 @@ export function createApp(deps: ServerDeps) {
       if (body.logoBase64) patch.logo = await uploadHouseLogo((snap.data() as any)?.slug ?? ref.id, String(body.logoBase64));
       else if (body.logo === null) patch.logo = null;
       await ref.set(patch, { merge: true });
+      // Auditoria: só os campos que de fato mudaram (antes→depois). 'logo' marcada à
+      // parte (não logamos o base64/URL inteiro — só que houve troca).
+      const changes = diffChanges(snap.data() as any, patch,
+        ['name', 'brandId', 'registerUrlTemplate', 'active', 'order', 'dataSource', 'defaultCpa', 'defaultRev']);
+      if ('logo' in patch) changes.push({ field: 'logo', before: '(anterior)', after: patch.logo ? '(nova)' : null });
+      if (changes.length) {
+        await writeAuditLog(req, {
+          entityType: 'house', entityId: String(req.params.id),
+          entityLabel: patch.name ?? (snap.data() as any)?.name ?? null,
+          action: 'house.update', changes,
+        });
+      }
       return res.json(houseFromDoc(await ref.get()));
     } catch (e: any) {
       console.error('[houses] erro ao atualizar:', e);
@@ -2111,7 +2187,13 @@ export function createApp(deps: ServerDeps) {
   app.delete('/api/houses/:id', requireAdmin, async (req, res) => {
     if (!adminDb) return res.status(500).json({ error: 'Servidor indisponível' });
     try {
-      await adminDb.collection('houses').doc(String(req.params.id)).delete();
+      const ref = adminDb.collection('houses').doc(String(req.params.id));
+      const snap = await ref.get(); // lê antes p/ guardar o nome na auditoria
+      await ref.delete();
+      await writeAuditLog(req, {
+        entityType: 'house', entityId: String(req.params.id),
+        entityLabel: (snap.data() as any)?.name ?? null, action: 'house.delete',
+      });
       return res.json({ ok: true });
     } catch (e) {
       console.error('[houses] erro ao remover:', e);
@@ -2225,9 +2307,38 @@ export function createApp(deps: ServerDeps) {
         const ref = adminDb!.collection('house_results').doc(hrDocId(row.houseSlug, row.date, row.affiliateId));
         ops.push((b) => b.set(ref, { ...row, importedByUid: uid, importedAt }));
       });
+
+      // Agrega as métricas por afiliado ATRIBUÍDO (p/ a notificação celebratória —
+      // 1 por afiliado, não 1 por linha/dia). sanitizeMetrics já coage p/ número.
+      const houseName = (houseSnap.data() as any)?.name ?? slug;
+      const byAff = new Map<string, ResultMetricsAgg>();
+      for (const row of clean) {
+        if (!row.affiliateId) continue;
+        const a = byAff.get(row.affiliateId) ?? { registrations: 0, first_deposits: 0, qualified_cpa: 0, total_commission: 0 };
+        a.registrations += Number(row.registrations) || 0;
+        a.first_deposits += Number(row.first_deposits) || 0;
+        a.qualified_cpa += Number(row.qualified_cpa) || 0;
+        a.total_commission += Number(row.total_commission) || 0;
+        byAff.set(row.affiliateId, a);
+      }
+
+      // Auditoria do upload — atômica com a gravação dos resultados (mesmo batch).
+      ops.push((b) => appendAuditLog(b, req, {
+        entityType: 'house_results', entityId: slug, entityLabel: houseName, action: 'house_results.import',
+        metadata: { dates: [...dates].sort(), imported: clean.length, deleted: toDelete.length, attributedAffiliates: byAff.size },
+      }));
+
       await commitChunked(ops);
 
-      return res.json({ ok: true, imported: clean.length, dates: [...dates].sort(), deleted: toDelete.length });
+      // Notifica cada afiliado atribuído (best-effort — nunca derruba o import já gravado).
+      let notified = 0;
+      try {
+        notified = await notifyAffiliatesOfResults(slug, houseName, byAff);
+      } catch (e) {
+        console.error('[house-results] falha ao notificar afiliados:', e);
+      }
+
+      return res.json({ ok: true, imported: clean.length, dates: [...dates].sort(), deleted: toDelete.length, notified });
     } catch (e: any) {
       console.error('[house-results] erro ao importar:', e);
       return res.status(500).json({ error: e?.message || 'Erro ao importar os resultados' });
@@ -2243,7 +2354,12 @@ export function createApp(deps: ServerDeps) {
       const date = req.query.date ? String(req.query.date) : null;
       const snap = await adminDb.collection('house_results').where('houseSlug', '==', slug).get();
       const docs = snap.docs.filter((d) => !date || (d.data() as any)?.date === date);
-      await commitChunked(docs.map((d) => (b: admin.firestore.WriteBatch) => b.delete(d.ref)));
+      const ops: ((b: admin.firestore.WriteBatch) => void)[] = docs.map((d) => (b) => { b.delete(d.ref); });
+      ops.push((b) => appendAuditLog(b, req, {
+        entityType: 'house_results', entityId: slug, action: 'house_results.clear',
+        metadata: { date: date ?? 'todas', deleted: docs.length },
+      }));
+      await commitChunked(ops);
       return res.json({ ok: true, deleted: docs.length });
     } catch (e) {
       console.error('[house-results] erro ao limpar:', e);
