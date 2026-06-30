@@ -55,12 +55,20 @@ function makeFirestore(seed: Record<string, Record<string, any>> = {}): any {
       getCol(col).delete(id);
     },
   });
-  const query = (col: string, filters: Array<[string, string, any]> = []): any => ({
+  const query = (
+    col: string,
+    filters: Array<[string, string, any]> = [],
+    order: [string, string] | null = null,
+    lim: number | null = null,
+  ): any => ({
     where(field: string, op: string, val: any) {
-      return query(col, [...filters, [field, op, val]]);
+      return query(col, [...filters, [field, op, val]], order, lim);
     },
-    limit() {
-      return query(col, filters);
+    orderBy(field: string, dir: string = 'asc') {
+      return query(col, filters, [field, dir], lim);
+    },
+    limit(n?: number) {
+      return query(col, filters, order, typeof n === 'number' ? n : lim);
     },
     doc(id?: string) {
       return docRef(col, id ?? `auto-${++autoId}`);
@@ -87,6 +95,16 @@ function makeFirestore(seed: Record<string, Record<string, any>> = {}): any {
           return true;
         });
       }
+      if (order) {
+        const [field, dir] = order;
+        docs = [...docs].sort((a, b) => {
+          const av = (a.data() as any)?.[field];
+          const bv = (b.data() as any)?.[field];
+          const cmp = av < bv ? -1 : av > bv ? 1 : 0;
+          return dir === 'desc' ? -cmp : cmp;
+        });
+      }
+      if (lim != null) docs = docs.slice(0, lim);
       return { docs, empty: docs.length === 0, size: docs.length, forEach: (cb: any) => docs.forEach(cb) };
     },
   });
@@ -597,6 +615,166 @@ describe('boost-affiliates + email aliases', () => {
 
     await request(app).get('/api/affiliate-email-aliases').set('Authorization', 'Bearer client-uid').expect(403);
     await request(app).post('/api/affiliate-email-aliases').set('Authorization', 'Bearer admin-uid').send({ email: 'x' }).expect(400);
+  });
+});
+
+// =============================================================================
+// Fase 4 — auditoria das demais ações de admin (server-authoritative)
+// Cada mutação grava 1 audit_log com QUEM (actor pelo token) + O QUÊ (action).
+// =============================================================================
+describe('Fase 4 — auditoria das ações de admin', () => {
+  const logsOf = (db: any, action?: string) =>
+    [...(db.__store.get('audit_logs')?.values() ?? [])].filter((l: any) => !action || l.action === action);
+
+  it('create-user → user.create com role/affiliateId na metadata (sem senha)', async () => {
+    const db = makeFirestore({ users: { 'admin-uid': { role: 'admin', name: 'Master' } } });
+    const app = createApp({ adminApp: makeAdminApp({ createUser: () => ({ uid: 'novo-uid' }) }), adminDb: db });
+    await request(app)
+      .post('/api/create-user')
+      .set('Authorization', 'Bearer admin-uid')
+      .send({ name: 'Fulano', email: 'F@X.com', password: 'segredo123', role: 'client', affiliateId: 'AFF-9' })
+      .expect(200);
+
+    const logs = logsOf(db, 'user.create');
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toMatchObject({
+      entityType: 'user', entityId: 'novo-uid', entityLabel: 'Fulano',
+      actorId: 'admin-uid', actorName: 'Master',
+      metadata: { role: 'client', affiliateId: 'AFF-9', email: 'f@x.com' },
+    });
+    expect(JSON.stringify(logs[0])).not.toContain('segredo123'); // senha NUNCA na trilha
+  });
+
+  it('link-affiliate-user → user.link_affiliate com antes→depois de affiliateId/isSpecial', async () => {
+    const db = makeFirestore({
+      users: { 'admin-uid': { role: 'admin' }, 'lo-uid': { role: 'client' } },
+    });
+    const app = createApp({
+      adminApp: makeAdminApp({ getUserByEmail: (email: string) => ({ uid: 'lo-uid', email }) }),
+      adminDb: db,
+    });
+    await request(app)
+      .post('/api/link-affiliate-user')
+      .set('Authorization', 'Bearer admin-uid')
+      .send({ email: 'lo@x.com', affiliateId: 'AFF-1' })
+      .expect(200);
+
+    const logs = logsOf(db, 'user.link_affiliate');
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toMatchObject({ entityType: 'user', entityId: 'lo-uid', actorId: 'admin-uid' });
+    const fields = (logs[0] as any).changes.map((c: any) => c.field);
+    expect(fields).toContain('affiliateId');
+    const affChange = (logs[0] as any).changes.find((c: any) => c.field === 'affiliateId');
+    expect(affChange).toMatchObject({ before: null, after: 'AFF-1' });
+  });
+
+  it('accept-invite → user.accept_invite atribuído ao PRÓPRIO afiliado (rota pública)', async () => {
+    const db = makeFirestore({
+      invites: { t1: { status: 'pending', affiliateId: 'AFF-1', affiliateName: 'Casa', expiresAt: { toMillis: () => Date.now() + 3_600_000 } } },
+    });
+    const app = createApp({ adminApp: makeAdminApp({ createUser: () => ({ uid: 'self-uid' }) }), adminDb: db });
+    await request(app)
+      .post('/api/accept-invite')
+      .send({ token: 't1', email: 'self@x.com', password: 'segredo123', phone: '11999999999' })
+      .expect(201);
+
+    const logs = logsOf(db, 'user.accept_invite');
+    expect(logs).toHaveLength(1);
+    // sem requireAuth: o autor é o próprio afiliado recém-criado (não fica nulo)
+    expect(logs[0]).toMatchObject({ entityType: 'user', entityId: 'self-uid', actorId: 'self-uid', metadata: { affiliateId: 'AFF-1' } });
+  });
+
+  it('invites → invite.create SEM gravar o token', async () => {
+    const db = makeFirestore({ users: { 'admin-uid': { role: 'admin' } } });
+    const app = createApp({ adminApp: makeAdminApp(), adminDb: db });
+    const res = await request(app)
+      .post('/api/invites')
+      .set('Authorization', 'Bearer admin-uid')
+      .send({ affiliateId: 'AFF-1', affiliateName: 'Casa' })
+      .expect(201);
+
+    const logs = logsOf(db, 'invite.create');
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toMatchObject({ entityType: 'affiliate', entityId: 'AFF-1', entityLabel: 'Casa' });
+    expect(JSON.stringify(logs[0])).not.toContain(res.body.token); // token (credencial) fora da trilha
+  });
+
+  it('boost-affiliates → affiliate.create_boost por NOVO; reuse não loga de novo', async () => {
+    const db = makeFirestore({ users: { 'admin-uid': { role: 'admin' } } });
+    const app = createApp({ adminApp: makeAdminApp(), adminDb: db });
+    await request(app).post('/api/boost-affiliates').set('Authorization', 'Bearer admin-uid')
+      .send({ affiliates: [{ name: 'A', email: 'a@x.com', house: 'Betfair' }] }).expect(201);
+    // 2º upload do MESMO e-mail → reusa (idempotente) → NÃO gera novo log
+    await request(app).post('/api/boost-affiliates').set('Authorization', 'Bearer admin-uid')
+      .send({ affiliates: [{ name: 'A', email: 'a@x.com', house: 'Betfair' }] }).expect(201);
+
+    const logs = logsOf(db, 'affiliate.create_boost');
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toMatchObject({ entityType: 'affiliate', action: 'affiliate.create_boost', actorId: 'admin-uid' });
+    expect((logs[0] as any).metadata).toMatchObject({ house: 'Betfair', hasEmail: true });
+  });
+
+  it('affiliate-email-aliases → affiliate.link_email (e-mail na metadata; trilha é admin-only)', async () => {
+    const db = makeFirestore({ users: { 'admin-uid': { role: 'admin' } } });
+    const app = createApp({ adminApp: makeAdminApp(), adminDb: db });
+    await request(app).post('/api/affiliate-email-aliases').set('Authorization', 'Bearer admin-uid')
+      .send({ email: 'JS@Gmail.com', affiliateId: '8a58' }).expect(200);
+
+    const logs = logsOf(db, 'affiliate.link_email');
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toMatchObject({ entityType: 'affiliate', entityId: '8a58', metadata: { email: 'js@gmail.com' } });
+  });
+
+  describe('affiliates/sync → affiliate.sync (precisa da chave + fetch externo)', () => {
+    beforeAll(() => { process.env.AFFILIATE_API_KEY = 'k'; });
+    afterAll(() => { delete process.env.AFFILIATE_API_KEY; });
+
+    it('grava affiliate.sync com synced/total/reconciled', async () => {
+      const db = makeFirestore({ users: { 'admin-uid': { role: 'admin' } } });
+      const fetchImpl = async () => ({ ok: true, status: 200, json: async () => ({ data: { data: [{ id: 'AFF-X', name: 'X' }] } }) }) as any;
+      const app = createApp({ adminApp: makeAdminApp(), adminDb: db, fetchImpl });
+      await request(app).post('/api/affiliates/sync').set('Authorization', 'Bearer admin-uid').expect(200);
+
+      const logs = logsOf(db, 'affiliate.sync');
+      expect(logs).toHaveLength(1);
+      expect(logs[0]).toMatchObject({ entityType: 'affiliates', entityId: null, metadata: { synced: 1, total: 1 } });
+    });
+  });
+});
+
+// =============================================================================
+// Fase 5 — GET /api/audit-logs: ?limit= e filtro por entidade (?entityType&entityId)
+// =============================================================================
+describe('Fase 5 — GET /api/audit-logs (limit + filtro por entidade)', () => {
+  const seed = () => ({
+    users: { 'admin-uid': { role: 'admin' }, 'client-uid': { role: 'client' } },
+    audit_logs: {
+      l1: { entityType: 'house', entityId: 'betano', action: 'house.create', createdAt: { toMillis: () => 100 } },
+      l2: { entityType: 'affiliate', entityId: 'AFF-1', action: 'affiliate.activate', createdAt: { toMillis: () => 300 } },
+      l3: { entityType: 'house', entityId: 'betano', action: 'house.update', createdAt: { toMillis: () => 200 } },
+    },
+  });
+
+  it('sem filtro → lista tudo (admin); client → 403', async () => {
+    const app = createApp({ adminApp: makeAdminApp(), adminDb: makeFirestore(seed()) });
+    const res = await request(app).get('/api/audit-logs').set('Authorization', 'Bearer admin-uid').expect(200);
+    expect(res.body).toHaveLength(3);
+    await request(app).get('/api/audit-logs').set('Authorization', 'Bearer client-uid').expect(403);
+  });
+
+  it('?entityType=house&entityId=betano → só os 2 da casa, ordenados por createdAt desc', async () => {
+    const app = createApp({ adminApp: makeAdminApp(), adminDb: makeFirestore(seed()) });
+    const res = await request(app)
+      .get('/api/audit-logs?entityType=house&entityId=betano')
+      .set('Authorization', 'Bearer admin-uid')
+      .expect(200);
+    expect(res.body.map((l: any) => l.action)).toEqual(['house.update', 'house.create']); // 200 antes de 100
+  });
+
+  it('?limit=1 → corta para 1 log', async () => {
+    const app = createApp({ adminApp: makeAdminApp(), adminDb: makeFirestore(seed()) });
+    const res = await request(app).get('/api/audit-logs?limit=1').set('Authorization', 'Bearer admin-uid').expect(200);
+    expect(res.body).toHaveLength(1);
   });
 });
 

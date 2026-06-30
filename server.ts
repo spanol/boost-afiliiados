@@ -516,6 +516,20 @@ export function createApp(deps: ServerDeps) {
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
 
+      await writeAuditLog(req, {
+        entityType: 'user',
+        entityId: userRecord.uid,
+        entityLabel: normalizedName,
+        action: 'user.create',
+        // NUNCA logamos a senha. role/affiliateId definem escopo → ficam na trilha.
+        metadata: {
+          email: normalizedEmail,
+          role: normalizedRole,
+          affiliateId: affiliateId ? String(affiliateId) : null,
+          mustChangePassword: !!mustChangePassword,
+        },
+      });
+
       return res.json({ uid: userRecord.uid });
     } catch (error: any) {
       console.error('Error creating auth user:', error);
@@ -556,11 +570,27 @@ export function createApp(deps: ServerDeps) {
       const specialSnap = await adminDb.collection('special_affiliates').doc(affId).get();
       const isSpecial = resolveIsSpecial(specialSnap.exists ? (specialSnap.data() as any) : null);
 
-      await adminDb.collection('users').doc(userRecord.uid).set({
+      // Lê o doc atual ANTES do set p/ a auditoria registrar o antes→depois real
+      // de affiliateId/isSpecial (mudança de vínculo/escopo).
+      const userRef = adminDb.collection('users').doc(userRecord.uid);
+      const beforeUser = (await userRef.get()).data() as any;
+
+      await userRef.set({
         affiliateId: affId,
         isSpecial,
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
+
+      const linkChanges = diffChanges(beforeUser, { affiliateId: affId, isSpecial }, ['affiliateId', 'isSpecial']);
+      if (linkChanges.length) {
+        await writeAuditLog(req, {
+          entityType: 'user',
+          entityId: userRecord.uid,
+          entityLabel: normalizedEmail,
+          action: 'user.link_affiliate',
+          changes: linkChanges,
+        });
+      }
 
       return res.json({ uid: userRecord.uid, affiliateId: affId, isSpecial });
     } catch (error: any) {
@@ -716,19 +746,46 @@ export function createApp(deps: ServerDeps) {
     }
   });
 
-  app.get('/api/audit-logs', requireAdmin, async (_req, res) => {
+  app.get('/api/audit-logs', requireAdmin, async (req, res) => {
     if (!adminDb) {
       return res.status(500).json({ error: 'Firebase Admin não está inicializado.' });
     }
 
     try {
-      const snapshot = await adminDb
-        .collection('audit_logs')
-        .orderBy('createdAt', 'desc')
-        .limit(200)
-        .get();
+      // ?limit= (default 200, teto 1000). ?entityType=&entityId= filtram o histórico
+      // de UMA entidade. Filtro = equality-only (where ==) SEM orderBy → não exige
+      // índice composto no Firestore; nesse caso ordenamos por createdAt em memória.
+      const rawLimit = Number(req.query.limit);
+      const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(Math.trunc(rawLimit), 1), 1000) : 200;
+      const entityType = typeof req.query.entityType === 'string' ? req.query.entityType.trim() : '';
+      const entityId = typeof req.query.entityId === 'string' ? req.query.entityId.trim() : '';
 
-      const logs = snapshot.docs.map((item) => {
+      let snapshot;
+      let sortInMemory = false;
+      if (entityType) {
+        // Histórico por entidade: where equality (auto-indexado), ordena em memória.
+        let q: any = adminDb.collection('audit_logs').where('entityType', '==', entityType);
+        if (entityId) q = q.where('entityId', '==', entityId);
+        snapshot = await q.limit(limit).get();
+        sortInMemory = true;
+      } else {
+        snapshot = await adminDb
+          .collection('audit_logs')
+          .orderBy('createdAt', 'desc')
+          .limit(limit)
+          .get();
+      }
+
+      // Extrator defensivo de millis (Timestamp do Admin SDK → toMillis; sentinel/ausente → 0).
+      const millisOf = (ts: any): number =>
+        ts?.toMillis ? ts.toMillis() : (typeof ts?._seconds === 'number' ? ts._seconds * 1000 : 0);
+
+      let docs = snapshot.docs;
+      if (sortInMemory) {
+        docs = [...docs].sort((a: any, b: any) => millisOf(b.data()?.createdAt) - millisOf(a.data()?.createdAt));
+      }
+
+      const logs = docs.map((item: any) => {
         const data = item.data();
         return {
           id: item.id,
@@ -1229,7 +1286,7 @@ export function createApp(deps: ServerDeps) {
   };
 
   // Sync the external affiliate list into the local `affiliates` collection.
-  app.post('/api/affiliates/sync', requireAdmin, async (_req, res) => {
+  app.post('/api/affiliates/sync', requireAdmin, async (req, res) => {
     if (!adminDb) {
       return res.status(500).json({ error: 'Firebase Admin não está inicializado.' });
     }
@@ -1257,6 +1314,12 @@ export function createApp(deps: ServerDeps) {
       }
       // Após espelhar o relatório, reconcilia os pré-cadastros que já apareceram.
       const reconciled = await reconcilePending(affiliates);
+      await writeAuditLog(req, {
+        entityType: 'affiliates',
+        entityId: null,
+        action: 'affiliate.sync',
+        metadata: { synced: written, total: affiliates.length, reconciled },
+      });
       return res.json({ synced: written, total: affiliates.length, reconciled });
     } catch (error: any) {
       console.error('Error syncing affiliates:', error);
@@ -1514,6 +1577,14 @@ export function createApp(deps: ServerDeps) {
         return res.status(400).json({ error: 'affiliateId é obrigatório.' });
       }
       const { token, expiresAt } = await createInviteDoc(String(affiliateId), affiliateName);
+      // NÃO gravamos o token na trilha (é credencial single-use) — só que houve convite.
+      await writeAuditLog(req, {
+        entityType: 'affiliate',
+        entityId: String(affiliateId),
+        entityLabel: affiliateName ? String(affiliateName) : null,
+        action: 'invite.create',
+        metadata: { expiresAt },
+      });
       return res.status(201).json({ token, expiresAt });
     } catch (error: any) {
       console.error('Error creating invite:', error);
@@ -1590,6 +1661,16 @@ export function createApp(deps: ServerDeps) {
         if (generateInvite) {
           try { invite = await createInviteDoc(affiliateId, name); } catch (e) { console.error('invite p/ boost-affiliate falhou:', e); }
         }
+        // Audita só a CRIAÇÃO de afiliado nativo (reuse idempotente não muda nada).
+        if (!reused) {
+          await writeAuditLog(req, {
+            entityType: 'affiliate',
+            entityId: affiliateId,
+            entityLabel: name,
+            action: 'affiliate.create_boost',
+            metadata: { house: house || null, hasEmail: !!emailKey, invited: !!invite },
+          });
+        }
         created.push({ affiliateId, name, email: emailKey || null, reused, invite });
       }
 
@@ -1619,6 +1700,13 @@ export function createApp(deps: ServerDeps) {
         createdByUid: (req as any).user?.uid ?? null,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
+      // audit_logs é admin-only (rule), então o e-mail (PII) pode ficar na metadata.
+      await writeAuditLog(req, {
+        entityType: 'affiliate',
+        entityId: affiliateId,
+        action: 'affiliate.link_email',
+        metadata: { email: emailKey },
+      });
       return res.json({ email: emailKey, affiliateId });
     } catch (error: any) {
       console.error('Error creating email alias:', error);
@@ -1748,6 +1836,17 @@ export function createApp(deps: ServerDeps) {
         usedByUid: userRecord.uid,
         usedAt: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
+
+      // Rota PÚBLICA (sem requireAuth): o autor é o próprio afiliado que se cadastrou.
+      // Carimba o user recém-criado em req p/ auditEntry atribuir a ele (não fica nulo).
+      (req as any).user = { uid: userRecord.uid, email: normalizedEmail, name: affiliateName };
+      await writeAuditLog(req, {
+        entityType: 'user',
+        entityId: userRecord.uid,
+        entityLabel: normalizedEmail,
+        action: 'user.accept_invite',
+        metadata: { affiliateId: affId, isSpecial },
+      });
 
       return res.status(201).json({ uid: userRecord.uid, affiliateId: String(invite.affiliateId) });
     } catch (error: any) {
