@@ -104,8 +104,14 @@ service cloud.firestore {
     match /affiliate_statuses/{statusId} {
       allow read, write: if isAdmin();
     }
+    // APPEND-ONLY: o log é gravado SÓ pelo servidor (Admin SDK, que ignora estas
+    // rules). O cliente admin pode LER a trilha, mas NÃO escrever/editar/apagar —
+    // assim a auditoria não é adulterável nem pelo próprio admin. Antes era
+    // `write: if isAdmin()`, o que deixava um admin forjar/remover logs pelo SDK do
+    // cliente. [[boost-audit-trail]]
     match /audit_logs/{logId} {
-      allow read, write: if isAdmin();
+      allow read: if isAdmin();
+      allow write: if false;
     }
 
     // B4 · Dados de pagamento do afiliado (PIX/NF — PII). Lidos/gravados pelo

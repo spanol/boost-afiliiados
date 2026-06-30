@@ -60,6 +60,12 @@ function makeFirestore(seed: Record<string, Record<string, any>> = {}): any {
     doc(id: string) {
       return docRef(col, id);
     },
+    async add(data: any) {
+      const m = getCol(col);
+      const id = `auto-${m.size + 1}`;
+      m.set(id, data);
+      return { id, ref: docRef(col, id) };
+    },
     async get() {
       const m = getCol(col);
       let docs = [...m.entries()].map(([id, data]) => ({
@@ -150,6 +156,58 @@ describe('requireAdmin (R13)', () => {
       .get('/api/affiliate-statuses')
       .set('Authorization', 'Bearer admin-uid')
       .expect(200);
+  });
+});
+
+// =============================================================================
+// Auditoria (Fase 1) — o status do afiliado vira log SERVER-AUTHORITATIVE
+// =============================================================================
+describe('auditoria — status do afiliado grava audit_logs server-side', () => {
+  const seed = { users: { 'admin-uid': { role: 'admin', name: 'Master Boost' } } };
+
+  it('desativar grava log com entidade, ação, autor (do token) e motivo', async () => {
+    const db = makeFirestore(seed);
+    const app = createApp({ adminApp: makeAdminApp(), adminDb: db });
+    await request(app)
+      .patch('/api/affiliates/AFF-1')
+      .set('Authorization', 'Bearer admin-uid')
+      .send({ status: 'inactive', reason: 'suspeita de fraude' })
+      .expect(200);
+
+    const logs = [...(db.__store.get('audit_logs')?.values() ?? [])];
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toMatchObject({
+      entityType: 'affiliate',
+      entityId: 'AFF-1',
+      action: 'affiliate.deactivate',
+      actorId: 'admin-uid',
+      actorName: 'Master Boost',
+      reason: 'suspeita de fraude',
+      affiliateId: 'AFF-1', // espelho p/ a tabela legada
+    });
+  });
+
+  it('ativar usa affiliate.activate e motivo vazio vira null', async () => {
+    const db = makeFirestore(seed);
+    const app = createApp({ adminApp: makeAdminApp(), adminDb: db });
+    await request(app)
+      .patch('/api/affiliates/AFF-9')
+      .set('Authorization', 'Bearer admin-uid')
+      .send({ status: 'active' })
+      .expect(200);
+    const logs = [...(db.__store.get('audit_logs')?.values() ?? [])];
+    expect(logs[0]).toMatchObject({ action: 'affiliate.activate', entityId: 'AFF-9', reason: null });
+  });
+
+  it('status inválido → 400 e NÃO grava log', async () => {
+    const db = makeFirestore(seed);
+    const app = createApp({ adminApp: makeAdminApp(), adminDb: db });
+    await request(app)
+      .patch('/api/affiliates/AFF-1')
+      .set('Authorization', 'Bearer admin-uid')
+      .send({ status: 'nope' })
+      .expect(400);
+    expect(db.__store.get('audit_logs')?.size ?? 0).toBe(0);
   });
 });
 

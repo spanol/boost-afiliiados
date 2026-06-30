@@ -135,17 +135,67 @@ export function createApp(deps: ServerDeps) {
     if (!adminApp || !adminDb) return res.status(500).json({ error: 'Firebase Admin não está inicializado.' });
     const decoded = await verifyBearer(req);
     if (!decoded) return res.status(401).json({ error: 'Não autenticado.' });
+    let name: string | null = null;
     try {
       const snap = await adminDb.collection('users').doc(decoded.uid).get();
       if (!snap.exists || snap.data()?.role !== 'admin') {
         return res.status(403).json({ error: 'Acesso restrito a administradores.' });
       }
+      // Nome do admin p/ carimbar o autor nos logs de auditoria (não-forjável: vem
+      // do users/{uid} resolvido pelo token, nunca do corpo do request).
+      name = snap.data()?.name ?? snap.data()?.displayName ?? null;
     } catch {
       return res.status(500).json({ error: 'Erro ao verificar permissões.' });
     }
-    (req as any).user = { uid: decoded.uid, email: decoded.email };
+    (req as any).user = { uid: decoded.uid, email: decoded.email, name };
     next();
   };
+
+  // --- Auditoria (server-authoritative) -------------------------------------
+  // Cada mutação de admin grava em `audit_logs`: QUEM (autor carimbado pelo token,
+  // nunca pelo cliente), O QUÊ (entidade + ação) e, quando faz sentido, o antes→depois
+  // (`changes`) + `metadata`. A coleção é APPEND-ONLY nas rules (cliente não escreve/
+  // edita/apaga) — o log é a fonte de verdade da trilha. NUNCA quebra a ação principal:
+  // falha ao gravar só vai ao console. [[boost-audit-trail]]
+  type AuditChange = { field: string; before: unknown; after: unknown };
+  interface AuditFields {
+    entityType: string;            // 'affiliate' | 'house' | 'affiliate_config' | 'user' | ...
+    entityId?: string | null;      // id da entidade (affiliateId, slug, uid, token…)
+    entityLabel?: string | null;   // nome no momento (snapshot) p/ exibir sem join
+    action: string;                // 'affiliate.deactivate' | 'house.create' | 'config.update' | ...
+    changes?: AuditChange[] | null;
+    metadata?: Record<string, unknown> | null;
+    reason?: string | null;
+  }
+  function auditEntry(req: express.Request, f: AuditFields) {
+    const u = (req as any).user || {};
+    const entityId = f.entityId != null ? String(f.entityId) : null;
+    return {
+      entityType: String(f.entityType),
+      entityId,
+      entityLabel: f.entityLabel ?? null,
+      action: String(f.action),
+      actorId: u.uid ?? null,
+      actorName: u.name ?? null,
+      actorEmail: u.email ?? null,
+      changes: f.changes ?? null,
+      metadata: f.metadata ?? null,
+      reason: f.reason ?? null,
+      // Espelho do id p/ a tabela legada (Settings lê `log.affiliateId`) seguir
+      // funcionando até a UI nova de /auditoria entrar (Fase 5).
+      affiliateId: f.entityType === 'affiliate' ? entityId : null,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+  }
+  // Grava um log de forma autônoma (best-effort). Use quando a mutação não está num batch.
+  async function writeAuditLog(req: express.Request, f: AuditFields): Promise<void> {
+    if (!adminDb) return;
+    try {
+      await adminDb.collection('audit_logs').add(auditEntry(req, f));
+    } catch (e) {
+      console.error('[audit] falha ao gravar log:', e);
+    }
+  }
 
   // --- Partner auth (M2M) ---------------------------------------------------
   // Um parceiro externo NÃO é usuário logado (sem Firebase JWT). Ele se autentica
@@ -576,7 +626,7 @@ export function createApp(deps: ServerDeps) {
 
     try {
       const { affiliateId } = req.params;
-      const { status } = req.body ?? {};
+      const { status, reason } = req.body ?? {};
 
       if (!affiliateId) {
         return res.status(400).json({ error: 'affiliateId é obrigatório.' });
@@ -590,6 +640,14 @@ export function createApp(deps: ServerDeps) {
         status,
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
       }, { merge: true });
+
+      // Auditoria server-side (substitui o log que era feito pelo cliente).
+      await writeAuditLog(req, {
+        entityType: 'affiliate',
+        entityId: affiliateId,
+        action: status === 'active' ? 'affiliate.activate' : 'affiliate.deactivate',
+        reason: reason != null && String(reason).trim() ? String(reason).trim() : null,
+      });
 
       return res.json({ affiliateId, status });
     } catch (error: any) {

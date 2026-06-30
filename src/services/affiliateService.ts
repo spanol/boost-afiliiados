@@ -1015,7 +1015,9 @@ export async function fetchAffiliateLinks(): Promise<AffiliateLink[]> {
   }
 }
 
-export async function updateAffiliateStatus(affiliateId: string, status: 'active' | 'inactive'): Promise<any> {
+// `reason` é opcional e vai junto p/ o servidor REGISTRAR a auditoria server-side
+// (autor carimbado pelo token) — o cliente não grava mais o log direto.
+export async function updateAffiliateStatus(affiliateId: string, status: 'active' | 'inactive', reason?: string): Promise<any> {
   try {
     const response = await authFetch(`/api/affiliates/${affiliateId}`, {
       method: 'PATCH',
@@ -1023,7 +1025,7 @@ export async function updateAffiliateStatus(affiliateId: string, status: 'active
         'Content-Type': 'application/json',
         'Accept': 'application/json'
       },
-      body: JSON.stringify({ status })
+      body: JSON.stringify({ status, reason })
     });
 
     if (!response.ok) {

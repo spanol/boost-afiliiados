@@ -19,7 +19,7 @@ import {
   Clock,
   X
 } from 'lucide-react';
-import { fetchAffiliates, fetchAffiliateConfigs, fetchAffiliateStatuses, saveAffiliateConfig, buildBrandConfigTopPayload, updateAffiliateStatus, createAuditLog, fetchRegisteredUsers, updateUserRole, syncAffiliates, AffiliateConfig, fetchSpecialAffiliates, SpecialAffiliate, fetchPendingAffiliates, importPendingAffiliates, createAccessInvite } from '../services/affiliateService';
+import { fetchAffiliates, fetchAffiliateConfigs, fetchAffiliateStatuses, saveAffiliateConfig, buildBrandConfigTopPayload, updateAffiliateStatus, fetchRegisteredUsers, updateUserRole, syncAffiliates, AffiliateConfig, fetchSpecialAffiliates, SpecialAffiliate, fetchPendingAffiliates, importPendingAffiliates, createAccessInvite } from '../services/affiliateService';
 import SpecialAffiliateModal from '../components/SpecialAffiliateModal';
 import { useToast } from '../contexts/ToastContext';
 import { cn, humanizeName } from '../lib/utils';
@@ -343,14 +343,10 @@ export default function AffiliatesList() {
     // value expected 'active' or 'inactive'
     setUpdatingStatusId(affiliateId);
     try {
-      await updateAffiliateStatus(affiliateId, value);
+      // O servidor registra a auditoria (autor carimbado pelo token); o cliente
+      // só envia o motivo opcional — não grava mais o log direto.
+      await updateAffiliateStatus(affiliateId, value, reason);
       setAffiliates(prev => prev.map(a => (a.id === affiliateId ? { ...a, status: value } : a)));
-      // create audit log
-      try {
-        await createAuditLog({ affiliateId, actorId: profile?.uid, actorName: profile?.name, action: value === 'active' ? 'activated' : 'deactivated', reason });
-      } catch (logErr) {
-        console.error('Falha ao criar log de auditoria', logErr);
-      }
     } catch (err) {
       console.error('Erro ao atualizar status do afiliado', err);
     } finally {
