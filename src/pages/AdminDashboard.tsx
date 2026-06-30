@@ -23,6 +23,7 @@ import BrandLogo from '../components/BrandLogo';
 import { getBrandName, uniqueBrands, ALL_BRANDS, getKnownBrandName, getBrandMeta, getKnownBrands } from '../lib/brand';
 import { withKnownBrandNames } from '../lib/knownHouses';
 import { StoredManualRow, aggregateByHouse, emptyMetrics, addMetrics } from '../lib/houseResults';
+import { fetchHouses, syncKnownBrandsFrom } from '../services/houseService';
 import { fetchEurBrlRate, getCachedEurBrlRate } from '../lib/currency';
 import { DateRange, getDefaultRange } from '../lib/dateRange';
 
@@ -82,14 +83,24 @@ export default function AdminDashboard() {
     async function getResults() {
       try {
         setLoading(true);
-        const [allResults, cfgs, campaigns, specialData, byBrand, manual, eur] = await Promise.all([
+        // O registro de casas (defaultCpa) e a cotação EUR→BRL PRECISAM estar prontos
+        // ANTES de buscar/derivar a comissão das casas manuais: `fetchAllResultsByBrand`
+        // (fonte do card "COMISSÃO (CASA)") deriva a comissão manual via getKnownBrands()
+        // + cotação em cache. Em cold load (prod), esse registro ainda só tem as sementes
+        // OTG (o DashboardLayout o popula em paralelo, async) → casa manual saía R$ 0,00
+        // na comissão enquanto o lucro (reativo) vinha certo. Carregamos aqui de forma
+        // DETERMINÍSTICA. [[boost-house-cpa-eur]]
+        const [houses, eur] = await Promise.all([fetchHouses(), fetchEurBrlRate()]);
+        if (houses.length) syncKnownBrandsFrom(houses);
+        setEurRate(eur.rate);
+
+        const [allResults, cfgs, campaigns, specialData, byBrand, manual] = await Promise.all([
           fetchAllResults(range),
           fetchAffiliateConfigs(),
           fetchAllResultsByCampaign(range, brandAffiliateIds ?? undefined),
           fetchSpecialAffiliates(),
           fetchAllResultsByBrand(range),
           fetchManualResults(range),
-          fetchEurBrlRate(),
         ]);
         setResults(Array.isArray(allResults) ? allResults : []);
         setConfigs(cfgs || {});
@@ -97,7 +108,6 @@ export default function AdminDashboard() {
         setSpecials(specialData || {});
         setBrandRows(Array.isArray(byBrand) ? byBrand : []);
         setManualRows(Array.isArray(manual) ? manual : []);
-        setEurRate(eur.rate);
       } catch (err) {
         console.error('Error fetching dashboard data:', err);
         setResults([]);
